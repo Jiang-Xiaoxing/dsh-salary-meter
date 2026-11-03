@@ -12,6 +12,7 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState('');
       const [caughtUntil, setCaughtUntil] = useState(0);
       const [settingsOpen, setSettingsOpen] = useState(false);
+      const [savingView, setSavingView] = useState(false);
       const dialog = useRef(null);
       const widget = useRef(null);
       const drag = useRef(null);
@@ -25,7 +26,7 @@ window.__ModuleLoader__.load({
             if (!response.ok) throw new Error('工资信息暂时无法读取');
             const value = await response.json();
             if (abort.signal.aborted) return;
-            setSnapshot(value);
+            setSnapshot(previous => previous?.view.revision > value.view.revision ? { ...value, view: previous.view } : value);
             setError(value.error || '');
           } catch (error) {
             if (!abort.signal.aborted) setError(error.message);
@@ -48,8 +49,15 @@ window.__ModuleLoader__.load({
         if (!snapshot) return;
         let scheduled;
         function place() {
-          if (!widget.current || manuallyPlaced.current) return;
+          if (!widget.current) return;
           const box = widget.current.getBoundingClientRect();
+          if (manuallyPlaced.current) {
+            Object.assign(widget.current.style, {
+              left: `${Math.max(12, Math.min(innerWidth - box.width - 12, box.left))}px`,
+              top: `${Math.max(12, Math.min(innerHeight - box.height - 12, box.top))}px`,
+            });
+            return;
+          }
           const send = [...document.querySelectorAll('button')].find(button => ['发送消息', 'Send message', 'Send'].includes(button.getAttribute('aria-label')));
           const control = send?.getBoundingClientRect();
           const left = Math.max(12, innerWidth - box.width - 20);
@@ -75,7 +83,24 @@ window.__ModuleLoader__.load({
           document.removeEventListener('click', schedule);
           document.removeEventListener('input', schedule);
         };
-      }, [Boolean(snapshot), snapshot?.active]);
+      }, [Boolean(snapshot), snapshot?.active, snapshot?.view.expanded]);
+
+      async function toggleView() {
+        setSavingView(true);
+        try {
+          const response = await fetch('/api/salary-meter/view', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expanded: !snapshot.view.expanded }),
+          });
+          const value = await response.json();
+          if (!response.ok) throw new Error(value.error || '显示设置保存失败');
+          setSnapshot(previous => ({ ...previous, view: value }));
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setSavingView(false);
+        }
+      }
 
       if (!snapshot || !core) {
         return h('section', { 'data-salary-meter': true, className: 'sm-widget', role: 'status' }, error || '正在读取工资与饭钱…');
@@ -85,12 +110,13 @@ window.__ModuleLoader__.load({
       const partial = snapshot.today.unknown > 0;
       const amount = wage.earned - expenses;
       const recentExpense = now >= snapshot.lastExpenseAt && now - snapshot.lastExpenseAt < 4000;
-      const pose = now < caughtUntil ? 'caught' : (snapshot.active > 0 || recentExpense) ? 'eat' : 'idle';
+      const pose = now < caughtUntil ? 'caught' : 'eat';
+      const expanded = snapshot.view.expanded;
       const clockText = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
       const money = value => value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const expenseText = expenses > 0 && expenses < 0.01 ? expenses.toFixed(4) : money(expenses);
       const feeDescription = '按已识别的 DeepSeek 官方模型 token 和 2026-11-03 单价估算。节假日调整、搜索抓取、辅助调用和第三方模型费用未纳入。';
-      return h('section', { ref: widget, 'data-salary-meter': true, className: 'sm-widget', 'aria-label': '打工养肥鱼' },
+      return h('section', { ref: widget, 'data-salary-meter': true, 'data-expanded': expanded, className: 'sm-widget', 'aria-label': '打工养肥鱼' },
         h('div', { className: 'sm-top',
           onPointerDown: event => {
             if (event.target.closest('button')) return;
@@ -108,21 +134,23 @@ window.__ModuleLoader__.load({
           onPointerUp: () => { drag.current = null; },
           onPointerCancel: () => { drag.current = null; },
         },
-          h('span', { className: 'sm-status' }, h('i', { 'data-working': wage.status === '上班中' }), wage.status),
+          h('span', { className: 'sm-title', title: wage.status }, '碗里还剩'),
           h('time', { className: 'sm-clock' }, clockText),
           h(Button, { size: 'sm', variant: 'ghost', title: '工资参数设置', 'aria-label': '工资参数设置', onClick: () => setSettingsOpen(true) }, '⋯')),
         h('div', { className: 'sm-balance', title: partial ? '部分调用费用待支持，余额为上限估算' : '当日工资减去已统计的模型费用估算' },
-          h('small', null, partial ? '≤ ¥' : '≈ ¥'), h('span', null, money(amount)), h('label', null, '碗里还剩')),
-        // A mascot button has a custom image surface rather than a standard control shape.
-        h('button', { className: `sm-mascot sm-${pose}`, title: '发现她偷吃', 'aria-label': '发现鲸鱼娘偷吃', onClick: () => setCaughtUntil(Date.now() + 2500) },
-          h('img', { src: '/api/salary-meter/mascot.png', alt: '' })),
-        h('div', { className: 'sm-bubble' }, pose === 'caught' ? '饭自己跑嘴里的。' : pose === 'eat' ? '我就吃一小口。' : '等你赚饭钱呀。'),
+          h('small', null, partial ? '≤ ¥' : '≈ ¥'), h('span', { style: { '--sm-digits': money(amount).length } }, money(amount)),
+          h(Button, { className: 'sm-toggle', size: 'sm', variant: 'ghost', disabled: savingView, 'aria-label': expanded ? '收起人物' : '展开人物', 'aria-expanded': expanded, 'aria-controls': 'salary-meter-character', onClick: toggleView }, expanded ? '收起 ⌄' : '展开 ⌃')),
+        expanded && h('div', { id: 'salary-meter-character' },
+          // The mascot uses a custom image surface for its animation frames.
+          h('button', { className: `sm-mascot sm-${pose}`, title: '发现她偷吃', 'aria-label': '发现鲸鱼娘偷吃', onClick: () => setCaughtUntil(Date.now() + 2500) },
+            h('img', { className: pose === 'eat' ? 'sm-eating-sprite' : '', src: pose === 'eat' ? '/api/salary-meter/eating.png' : '/api/salary-meter/mascot.png', alt: '' })),
+          h('div', { className: 'sm-bubble' }, pose === 'caught' ? '饭自己跑嘴里的。' : snapshot.active > 0 || recentExpense ? '我就吃一小口。' : '再吃一口就收工。')),
         h('div', { className: 'sm-worktime' },
           h('div', { className: 'sm-worktime-row' },
             h('span', null, wage.countdownLabel, ' ', h('b', null, wage.countdownSeconds > 0 ? core.formatDuration(wage.countdownSeconds) : '')),
-            h('span', null, `今日进度 ${Math.round(wage.progress * 100)}%`)),
-          h('progress', { value: wage.progress, max: 1, 'aria-label': '今日工作进度' })),
-        h('div', { className: 'sm-ledger' },
+            expanded ? h('span', null, `进度 ${Math.round(wage.progress * 100)}%`) : h('span', { className: 'sm-compact-expense', title: feeDescription }, `偷吃 ${partial ? '≥' : '≈'}¥${expenseText}${partial ? ' 有遗漏' : ''}`)),
+          expanded && h('progress', { value: wage.progress, max: 1, 'aria-label': '今日工作进度' })),
+        expanded && h('div', { className: 'sm-ledger' },
           h('div', null, h('label', null, '今日打工入账'), h('b', null, `¥${money(wage.earned)}`)),
           h('div', { className: 'sm-expense', title: feeDescription }, h('label', null, partial ? '偷吃估算（有遗漏）' : '今日肥鱼偷吃（估算）'), h('b', null, `${partial ? '≥' : '−'} ¥${expenseText}`))),
         error && h('p', { className: 'sm-error', role: 'alert' }, error),

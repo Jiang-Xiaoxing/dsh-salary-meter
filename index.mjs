@@ -32,6 +32,7 @@ export async function apply(ctx) {
   const root = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'data', 'dsh-salary-meter');
   const configFile = join(root, 'config.json');
   const ledgerFile = join(root, 'ledger.json');
+  const viewFile = join(root, 'view.json');
   let saved = await readJson(configFile, null);
   if (!saved) {
     const original = process.platform === 'win32' && process.env.APPDATA
@@ -41,12 +42,15 @@ export async function apply(ctx) {
     await atomicJson(configFile, saved);
   }
   saved.config = validateConfig(saved.config);
+  const savedView = await readJson(viewFile, null);
+  let view = { expanded: savedView?.expanded === true, revision: savedView?.revision ?? 0 };
   const ledger = await readJson(ledgerFile, { days: {}, positions: {}, lastExpenseAt: 0 });
   const sessions = new WeakMap();
   const active = new Set();
   let writes = Promise.resolve();
   let writeError = null;
   let configWrites = Promise.resolve();
+  let viewWrites = Promise.resolve();
   function persistLedger() {
     const snapshot = structuredClone(ledger);
     writes = writes.then(async () => {
@@ -75,10 +79,11 @@ export async function apply(ctx) {
     if (changed) persistLedger();
   }
   ctx.on('session/event', session => scan(session));
-  ctx.effect(() => () => Promise.all([writes, configWrites]), 'salary-meter: drain data writes');
+  ctx.effect(() => () => Promise.all([writes, configWrites, viewWrites]), 'salary-meter: drain data writes');
 
   const assets = new Map([
     ['/api/salary-meter/mascot.png', ['assets/whale-girl-poses.png', 'image/png']],
+    ['/api/salary-meter/eating.png', ['assets/whale-girl-eating.png', 'image/png']],
     ['/api/salary-meter/widget.css', ['assets/widget.css', 'text/css; charset=utf-8']],
     ['/api/salary-meter/core.mjs', ['core.mjs', 'text/javascript; charset=utf-8']],
     ['/api/salary-meter/settings', ['assets/settings.html', 'text/html; charset=utf-8']],
@@ -95,7 +100,7 @@ export async function apply(ctx) {
       const liveIds = new Set(live.map(session => session.id));
       for (const id of active) if (!liveIds.has(id)) active.delete(id);
       return Response.json({
-        config: saved.config, revision: saved.revision,
+        config: saved.config, revision: saved.revision, view,
         today: ledger.days[chinaDay(Date.now())] ?? { expense: 0, known: 0, unknown: 0 },
         active: active.size, lastExpenseAt: ledger.lastExpenseAt,
         error: writeError, priceDate: '2026-11-03',
@@ -120,6 +125,26 @@ export async function apply(ctx) {
       configWrites = operation.catch(() => {});
       try { return await operation; }
       catch { return Response.json({ error: '参数保存失败，请检查数据目录权限' }, { status: 500 }); }
+    },
+  });
+  ctx.connection.fetch.register({
+    path: '/api/salary-meter/view', methods: ['PUT'], requestBody: 'buffered',
+    fetch: async request => {
+      const text = await request.text();
+      if (text.length > 256) return Response.json({ error: '显示设置内容过长' }, { status: 413 });
+      let body;
+      try { body = JSON.parse(text); }
+      catch { return Response.json({ error: '显示设置格式错误' }, { status: 400 }); }
+      if (typeof body?.expanded !== 'boolean') return Response.json({ error: '请选择收起或展开人物' }, { status: 400 });
+      const operation = viewWrites.then(async () => {
+        const next = { expanded: body.expanded, revision: view.revision + 1 };
+        await atomicJson(viewFile, next);
+        view = next;
+        return Response.json(view);
+      });
+      viewWrites = operation.catch(() => {});
+      try { return await operation; }
+      catch { return Response.json({ error: '显示设置保存失败，请重试' }, { status: 500 }); }
     },
   });
 }

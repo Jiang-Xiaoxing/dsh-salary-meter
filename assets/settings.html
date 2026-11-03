@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工资参数设置</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; background: var(--dsw-alias-bg-layer-1, #232324); color: var(--dsw-alias-label-primary, #e9ebf2); font: 13px/1.6 'Microsoft YaHei', sans-serif; }
+h1 { font-size: 18px; margin: 0 0 16px; }
+label { display: block; margin: 10px 0 5px; color: var(--dsw-alias-label-secondary, #a3a7b3); }
+input { width: 100%; height: 34px; border: .5px solid var(--dsw-alias-border-l2, #ffffff25); border-radius: 12px; padding: 6px 10px; background: var(--dsw-alias-bg-layer-2, #2c2c2e); color: inherit; font: inherit; color-scheme: dark; }
+.row { display: flex; gap: 14px; }.row > div { flex: 1; }
+.check { display: flex; gap: 8px; align-items: center; margin-top: 17px; }.check input { width: 16px; height: 16px; }
+button { background: var(--dsw-alias-button-primary-fill, #f9fafb); color: var(--dsw-alias-bg-base, #151517); border: 0; border-radius: 12px; padding: 8px 16px; font: inherit; cursor: pointer; }
+#feedback { min-height: 23px; color: var(--dsw-alias-state-warn-primary, #f0bf69); margin: 10px 0; }
+.hint { font-size: 11px; color: var(--dsw-alias-label-tertiary, #9398a6); margin-top: 16px; }
+:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary, #8398ff); outline-offset: 2px; }
+</style>
+<h1>工资参数设置</h1>
+<form id="form">
+  <label for="salary">月薪（税后）</label><input id="salary" type="number" min="0" step="100" required>
+  <label for="days">每月工作日</label><input id="days" type="number" min="1" max="31" step="0.5" required>
+  <div class="row"><div><label for="start">上班时间</label><input id="start" type="time" required></div><div><label for="end">下班时间</label><input id="end" type="time" required></div></div>
+  <label for="lunch">午休时长（小时）</label><input id="lunch" type="number" min="0" max="23" step="0.5" required>
+  <label class="check"><input id="weekend" type="checkbox">周末也算上班</label>
+  <p id="feedback" role="status"></p><button id="save" type="submit" disabled>保存参数</button>
+</form>
+<p class="hint">午休从中午 12 点起计算，并限制在你的班次内。模型饭钱按已识别模型的 token 用量估算，单价核对日期为 2026-11-03。</p>
+<script>
+const fields = ['salary', 'days', 'start', 'end', 'lunch', 'weekend'];
+let revision;
+const feedback = document.getElementById('feedback');
+const save = document.getElementById('save');
+const theme = getComputedStyle(parent.document.body);
+for (const key of theme) if (key.startsWith('--dsw-')) document.documentElement.style.setProperty(key, theme.getPropertyValue(key));
+async function load() {
+  const response = await fetch('/api/salary-meter/state');
+  if (!response.ok) throw new Error('参数读取失败，请重新打开设置');
+  const state = await response.json();
+  revision = state.revision;
+  for (const key of fields) {
+    const input = document.getElementById(key);
+    if (key === 'weekend') input.checked = state.config[key];
+    else input.value = state.config[key];
+  }
+  save.disabled = false;
+}
+document.getElementById('form').addEventListener('submit', async event => {
+  event.preventDefault();
+  save.disabled = true;
+  feedback.textContent = '正在保存…';
+  const config = Object.fromEntries(fields.map(key => {
+    const input = document.getElementById(key);
+    return [key, key === 'weekend' ? input.checked : ['salary', 'days', 'lunch'].includes(key) ? Number(input.value) : input.value];
+  }));
+  try {
+    const response = await fetch('/api/salary-meter/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config, revision }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error);
+    revision = result.revision;
+    feedback.textContent = '已保存，挂件会同步更新';
+  } catch (error) { feedback.textContent = error.message; }
+  finally { save.disabled = false; }
+});
+load().catch(error => { feedback.textContent = error.message; });
+</script>
+</html>

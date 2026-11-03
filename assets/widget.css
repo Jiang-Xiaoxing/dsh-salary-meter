@@ -1,0 +1,59 @@
+[data-salary-meter] {
+  --sm-bg: var(--dsw-alias-bg-layer-1, #232324);
+  --sm-text: var(--dsw-alias-label-primary, #e9ebf2);
+  --sm-muted: var(--dsw-alias-label-tertiary, #9398a6);
+  --sm-line: var(--dsw-alias-border-l2, #ffffff17);
+  --sm-blue: var(--dsw-alias-state-business-primary, #8398ff);
+  position: fixed;
+  right: 20px;
+  bottom: 100px;
+  width: 324px;
+  height: 276px;
+  max-width: calc(100vw - 24px);
+  border-radius: var(--dsw-radius-xl, 20px);
+  background: var(--sm-bg);
+  color: var(--sm-text);
+  box-shadow: var(--dsw-elevation-panel, 0 0 0 .5px #ffffff1d, 0 7px 20px #0003);
+  font-family: var(--dsw-font-family, 'Microsoft YaHei', sans-serif);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  z-index: 20;
+  pointer-events: auto;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+[data-salary-meter] * { box-sizing: border-box; }
+.sm-top { display: flex; align-items: center; gap: 4px; padding: 7px 10px 0 16px; height: 30px; font-size: 10px; color: var(--sm-muted); cursor: move; touch-action: none; }
+.sm-status { display: flex; align-items: center; gap: 5px; margin-right: auto; }
+.sm-status i { width: 5px; height: 5px; border-radius: 50%; corner-shape: round; background: var(--dsw-alias-state-idle-primary, #81858c); }
+.sm-status i[data-working='true'] { background: var(--dsw-alias-state-success-primary, #66bd9c); }
+.sm-clock { font-size: 11px; font-variant-numeric: tabular-nums; }
+.sm-balance { display: flex; align-items: baseline; gap: 3px; padding: 0 16px; font: 600 29px/36px 'Segoe UI', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.6px; }
+.sm-balance small { font-size: 13px; font-weight: 400; color: var(--sm-muted); }
+.sm-balance label { margin-left: 6px; font-size: 9px; font-weight: 400; color: var(--sm-muted); letter-spacing: 0; }
+.sm-mascot { position: absolute; top: 56px; left: calc(50% - 72.5px); width: 145px; height: 145px; overflow: hidden; background: transparent; padding: 0; border: 0; cursor: pointer; }
+.sm-mascot img { position: absolute; top: 0; left: 0; width: 300%; height: 100%; max-width: none; pointer-events: none; }
+.sm-eat img { left: -100%; }
+.sm-caught img { left: -200%; }
+.sm-mascot:focus-visible { outline: 2px solid var(--sm-blue); outline-offset: -2px; border-radius: 12px; }
+.sm-bubble { position: absolute; top: 83px; right: 12px; padding: 5px 8px; font-size: 9px; border-radius: 8px 8px 0 8px; background: var(--dsw-specific-bubble, #34436c); color: var(--sm-text); }
+.sm-worktime { position: absolute; left: 16px; right: 16px; bottom: 51px; height: 25px; }
+.sm-worktime-row { display: flex; justify-content: space-between; align-items: center; color: var(--sm-muted); font-size: 9px; }
+.sm-worktime-row b { color: var(--sm-text); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.sm-worktime progress { display: block; width: 100%; height: 3px; margin-top: 5px; border: 0; border-radius: 4px; background: var(--sm-line); appearance: none; }
+.sm-worktime progress::-webkit-progress-bar { background: var(--sm-line); border-radius: 4px; }
+.sm-worktime progress::-webkit-progress-value { background: var(--sm-blue); border-radius: 4px; }
+.sm-worktime progress::-moz-progress-bar { background: var(--sm-blue); border-radius: 4px; }
+.sm-ledger { position: absolute; bottom: 0; left: 16px; right: 16px; height: 46px; border-top: .5px solid var(--sm-line); display: flex; align-items: center; justify-content: space-between; }
+.sm-ledger > div { display: flex; flex-direction: column; gap: 2px; }
+.sm-ledger label { font-size: 9px; color: var(--sm-muted); }
+.sm-ledger b { font: 500 13px/16px 'Segoe UI', sans-serif; font-variant-numeric: tabular-nums; }
+.sm-expense { text-align: right; }
+.sm-expense b { color: var(--dsw-alias-state-warn-primary, #f0bf69); }
+.sm-error { position: absolute; top: 150px; left: 12px; right: 12px; background: var(--sm-bg); color: var(--dsw-alias-state-error-primary, #ef8888); padding: 8px; margin: 0; font-size: 11px; }
+.sm-settings { width: 430px; max-width: calc(100vw - 24px); height: 590px; max-height: calc(100vh - 24px); padding: 0; border: 0; border-radius: 20px; background: var(--sm-bg); box-shadow: var(--dsw-elevation-prominent); color: var(--sm-text); }
+.sm-settings::backdrop { background: #0007; }
+.sm-settings iframe { width: 100%; height: 100%; border: 0; }
+.sm-close { position: absolute; right: 12px; top: 10px; font-size: 23px; color: var(--sm-muted); background: transparent; border: 0; cursor: pointer; }
+@media (max-width: 700px) { [data-salary-meter] { right: 12px; bottom: 100px; } }
+@media (prefers-reduced-motion: no-preference) { .sm-eat { animation: sm-bite 1.6s ease-in-out infinite; } }
+@keyframes sm-bite { 0%, 75%, 100% { transform: translateY(0); } 35% { transform: translateY(2px) rotate(-1deg); } }

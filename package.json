@@ -1,6 +1,6 @@
 {
   "name": "dsh-salary-meter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "打工养肥鱼，实时工资、下班倒计时和模型饭钱估算",
   "type": "module",
   "main": "./index.mjs",

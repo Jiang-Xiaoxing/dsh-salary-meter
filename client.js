@@ -26,7 +26,15 @@ window.__ModuleLoader__.load({
             if (!response.ok) throw new Error('工资信息暂时无法读取');
             const value = await response.json();
             if (abort.signal.aborted) return;
-            setSnapshot(previous => previous?.view.revision > value.view.revision ? { ...value, view: previous.view } : value);
+            setSnapshot(previous => {
+              const next = { ...value };
+              if (previous?.revision > value.revision) {
+                next.config = previous.config;
+                next.revision = previous.revision;
+              }
+              if (previous?.view.revision > value.view.revision) next.view = previous.view;
+              return next;
+            });
             setError(value.error || '');
           } catch (error) {
             if (!abort.signal.aborted) setError(error.message);
@@ -45,6 +53,17 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (settingsOpen && dialog.current && !dialog.current.open) dialog.current.showModal();
       }, [settingsOpen]);
+      useEffect(() => {
+        function savedSettings(event) {
+          const frame = dialog.current?.querySelector('iframe');
+          if (event.origin !== location.origin || event.source !== frame?.contentWindow || event.data?.type !== 'salary-meter:config-saved') return;
+          const { config, revision } = event.data;
+          setSnapshot(previous => previous.revision > revision ? previous : { ...previous, config, revision });
+          dialog.current.close();
+        }
+        window.addEventListener('message', savedSettings);
+        return () => window.removeEventListener('message', savedSettings);
+      }, []);
       useEffect(() => {
         if (!snapshot) return;
         let scheduled;

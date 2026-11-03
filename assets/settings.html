@@ -58,7 +58,7 @@ document.getElementById('form').addEventListener('submit', async event => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
     revision = result.revision;
-    feedback.textContent = '已保存，挂件会同步更新';
+    parent.postMessage({ type: 'salary-meter:config-saved', ...result }, location.origin);
   } catch (error) { feedback.textContent = error.message; }
   finally { save.disabled = false; }
 });

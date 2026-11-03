@@ -15,6 +15,7 @@ window.__ModuleLoader__.load({
       const dialog = useRef(null);
       const widget = useRef(null);
       const drag = useRef(null);
+      const manuallyPlaced = useRef(false);
       useEffect(() => {
         const abort = new AbortController();
         let timer;
@@ -43,6 +44,38 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (settingsOpen && dialog.current && !dialog.current.open) dialog.current.showModal();
       }, [settingsOpen]);
+      useEffect(() => {
+        if (!snapshot) return;
+        let scheduled;
+        function place() {
+          if (!widget.current || manuallyPlaced.current) return;
+          const box = widget.current.getBoundingClientRect();
+          const send = [...document.querySelectorAll('button')].find(button => ['发送消息', 'Send message', 'Send'].includes(button.getAttribute('aria-label')));
+          const control = send?.getBoundingClientRect();
+          const left = Math.max(12, innerWidth - box.width - 20);
+          const candidates = [innerHeight - box.height - 100, innerHeight - box.height - 20, 64];
+          const top = candidates.find(value => {
+            if (value < 12 || value + box.height > innerHeight - 12) return false;
+            return !control || left >= control.right || left + box.width <= control.left || value >= control.bottom || value + box.height <= control.top;
+          }) ?? 12;
+          Object.assign(widget.current.style, { left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto' });
+        }
+        function schedule(event) {
+          if (event?.target instanceof Element && event.target.closest('[data-salary-meter]')) return;
+          clearTimeout(scheduled);
+          scheduled = setTimeout(place, 100);
+        }
+        place();
+        window.addEventListener('resize', schedule);
+        document.addEventListener('click', schedule);
+        document.addEventListener('input', schedule);
+        return () => {
+          clearTimeout(scheduled);
+          window.removeEventListener('resize', schedule);
+          document.removeEventListener('click', schedule);
+          document.removeEventListener('input', schedule);
+        };
+      }, [Boolean(snapshot), snapshot?.active]);
 
       if (!snapshot || !core) {
         return h('section', { 'data-salary-meter': true, className: 'sm-widget', role: 'status' }, error || '正在读取工资与饭钱…');
@@ -51,7 +84,8 @@ window.__ModuleLoader__.load({
       const expenses = snapshot.today.expense;
       const partial = snapshot.today.unknown > 0;
       const amount = wage.earned - expenses;
-      const pose = now < caughtUntil ? 'caught' : (snapshot.active > 0 || now - snapshot.lastExpenseAt < 4000) ? 'eat' : 'idle';
+      const recentExpense = now >= snapshot.lastExpenseAt && now - snapshot.lastExpenseAt < 4000;
+      const pose = now < caughtUntil ? 'caught' : (snapshot.active > 0 || recentExpense) ? 'eat' : 'idle';
       const clockText = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
       const money = value => value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const expenseText = expenses > 0 && expenses < 0.01 ? expenses.toFixed(4) : money(expenses);
@@ -66,6 +100,7 @@ window.__ModuleLoader__.load({
           },
           onPointerMove: event => {
             if (!drag.current) return;
+            manuallyPlaced.current = true;
             const left = Math.max(0, Math.min(innerWidth - widget.current.offsetWidth, event.clientX - drag.current.x));
             const top = Math.max(0, Math.min(innerHeight - widget.current.offsetHeight, event.clientY - drag.current.y));
             Object.assign(widget.current.style, { left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto' });

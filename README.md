@@ -10,7 +10,7 @@
 | --- | --- |
 | ![深色挂件](docs/images/widget-dark.png) | ![浅色挂件](docs/images/widget-light.png) |
 
-截图来自 DSH 0.2.1-rc.3 的实际客户端，演示时钟设为工作日 15:30，工资参数使用默认值。
+截图来自 DSH 0.2.1-rc.3 的实际客户端，演示时钟设为工作日 15:30，工资参数使用默认值，费用使用合成 token 记录演示。
 
 ## 功能
 
@@ -28,17 +28,17 @@
 打开左侧“插件”，点击右上角“添加插件”，填写下方 GitHub 源并安装。
 
 ```text
-github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.0
+github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.1
 ```
 
-其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.1.0` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
+其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.1.1` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
 
 安装完成后按 DSH 的提示刷新或重开界面，右侧会出现工资挂件。
 
 ### DSH Web
 
 ```sh
-dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.0
+dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.1
 ```
 
 `dsh` 是 Harness 命令，`plugin` 管理插件，`--profile web` 选择 Web 运行环境，`add` 安装该 GitHub 源。命令会更新这个 profile 的插件依赖和启用列表。界面生效方式按宿主提示处理。

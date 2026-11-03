@@ -28,17 +28,17 @@
 打开左侧“插件”，点击右上角“添加插件”，填写下方 GitHub 源并安装。
 
 ```text
-github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.1
+github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.2
 ```
 
-其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.1.1` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
+其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.1.2` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
 
 安装完成后按 DSH 的提示刷新或重开界面，右侧会出现工资挂件。
 
 ### DSH Web
 
 ```sh
-dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.1
+dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.2
 ```
 
 `dsh` 是 Harness 命令，`plugin` 管理插件，`--profile web` 选择 Web 运行环境，`add` 安装该 GitHub 源。命令会更新这个 profile 的插件依赖和启用列表。界面生效方式按宿主提示处理。
@@ -56,7 +56,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.1
 
 `≈` 表示费用经过估算。有未识别的模型调用时，费用显示已知部分的下限，余额显示上限，并标出“有遗漏”。
 
-默认参数为月薪 10,000 元、每月工作 22 天、09:00 上班、18:00 下班、午休 1 小时，周末休息。午休从 12:00 起，并限制在班次范围内。Windows 首次启用时会尝试沿用原 SalaryMeter 的工资参数。
+默认参数为月薪 5,000 元、每月工作 22 天、09:00 上班、18:00 下班、午休 1 小时，周末休息。午休从 12:00 起，并限制在班次范围内。Windows 首次启用时会尝试沿用原 SalaryMeter 的工资参数。
 
 ## 费用统计范围
 
@@ -71,7 +71,8 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.1.1
 | 环境 | 验证情况 |
 | --- | --- |
 | Windows，DSH 0.2.1-rc.3 | 2026-11-03 完成安装版运行时和真实客户端装载检查 |
-| DSH 0.2.1-rc.4、0.2.1-rc.5 | 等待验证 |
+| Windows，DSH 0.2.1-rc.5 | 2026-11-03 完成安装版运行时和真实客户端装载检查 |
+| DSH 0.2.1-rc.4 | 等待验证 |
 | 其他系统和版本 | 等待验证 |
 
 已检查工资递增、倒计时递减、参数保存与落盘、浅色和深色画面、点击反馈、插件列表图标，以及 API 访问鉴权。费用数学和去重使用合成记录验证。

@@ -1,5 +1,5 @@
 export const DEFAULT_CONFIG = Object.freeze({
-  salary: 10000,
+  salary: 5000,
   days: 22,
   start: '09:00',
   end: '18:00',

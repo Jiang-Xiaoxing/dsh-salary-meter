@@ -5,9 +5,10 @@ process.env.TZ = 'Asia/Shanghai';
 
 const at = text => new Date(`2026-11-03T${text}+08:00`);
 test('工资按时间平滑累计，保持下班倒计时', () => {
+  assert.equal(DEFAULT_CONFIG.salary, 5000);
   const first = computeWage(DEFAULT_CONFIG, at('15:30:00'));
   const next = computeWage(DEFAULT_CONFIG, at('15:30:01'));
-  assert.equal(first.earned, 312.5);
+  assert.equal(first.earned, 156.25);
   assert.ok(Math.abs(next.earned - first.earned - first.perSecond) < 1e-9);
   assert.equal(formatDuration(first.countdownSeconds), '02:30:00');
   assert.equal(first.progress, 0.6875);

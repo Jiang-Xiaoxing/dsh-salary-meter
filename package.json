@@ -12,7 +12,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["index.mjs", "core.mjs", "client.js", "assets", "icon.svg", "locale", "cordis.patch.yml", "README.md"],
+  "files": ["index.mjs", "core.mjs", "client.js", "assets", "docs/images", "icon.svg", "locale", "cordis.patch.yml", "README.md"],
   "scripts": { "test": "node --test core.test.mjs" },
   "engines": { "node": ">=22" },
   "repository": { "type": "git", "url": "git+https://github.com/Jiang-Xiaoxing/dsh-salary-meter.git" },

@@ -2,7 +2,7 @@
 
 **DSH（DeepSeek Harness）社区插件**，用一条小工资条显示实时工资、当前时间、下班倒计时和模型饭钱估算，展开后可以看到抱着白米饭吃个不停的蓝毛鲸鱼娘。
 
-![鲸鱼娘的三种姿态](assets/whale-girl-poses.png)
+![鲸鱼娘的九个关键姿态](assets/whale-girl-actions.png)
 
 ## 使用效果
 
@@ -12,9 +12,9 @@
 
 默认收起人物，面板为 248 × 88 CSS 像素。点击“展开”显示 248 × 228 的人物面板，点击“收起”回到工资条，选择会保存。
 
-![展开后的六帧吃饭动画](docs/images/eating-animation.gif)
+![展开后的连续吃饭与小动作](docs/images/eating-animation.gif)
 
-截图和动画来自 DSH 0.2.1-rc.5 的实际客户端。截图演示时钟设为工作日 15:30，月薪使用默认 5,000 元，费用使用合成 token 记录。动画展示人物六帧动作，截图里的金额仅用于演示。
+截图和动画来自 DSH 0.2.1-rc.5 的实际客户端。截图演示时钟设为工作日 15:30，月薪使用默认 5,000 元，费用使用合成 token 记录。人物按 30 FPS 上限播放，在九个关键姿态间补充连续过渡。
 
 ## 功能
 
@@ -22,8 +22,9 @@
 - 显示当前时间、距下班倒计时和工作进度。午休暂停工资累计，倒计时继续。
 - 显示未开工、上班中、午休中、已下班、休息日状态。
 - 根据已识别模型的 token 使用记录估算当天“饭钱”。
-- 人物默认隐藏，展开后循环播放舀饭、送饭和咀嚼的六帧动画，点击鲸鱼娘会露出偷吃被发现的表情。
-- 记住人物的展开选择，关闭人物时停止动画，遵循系统“减少动态效果”偏好。
+- 人物默认隐藏，展开后播放夹饭、送饭、鼓脸咀嚼，穿插偷瞄、擦嘴、满足和打盹，点击后会抱紧饭碗。
+- 动画上限为 30 FPS，独立于工资面板更新。模型忙碌时会从打盹中醒来。
+- 记住人物的展开选择。收起时释放动画画布和纹理，窗口隐藏时暂停，遵循系统“减少动态效果”偏好。
 - 跟随 DSH 的浅色和深色主题，可拖动挂件顶部调整位置。
 
 ## 安装
@@ -33,17 +34,17 @@
 打开左侧“插件”，点击右上角“添加插件”，填写下方 GitHub 源并安装。
 
 ```text
-github:Jiang-Xiaoxing/dsh-salary-meter#v0.2.1
+github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.0
 ```
 
-其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.2.1` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
+其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.3.0` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
 
 安装完成后按 DSH 的提示刷新或重开界面，右侧会出现工资挂件。
 
 ### DSH Web
 
 ```sh
-dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.2.1
+dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.0
 ```
 
 `dsh` 是 Harness 命令，`plugin` 管理插件，`--profile web` 选择 Web 运行环境，`add` 安装该 GitHub 源。命令会更新这个 profile 的插件依赖和启用列表。界面生效方式按宿主提示处理。
@@ -75,12 +76,14 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.2.1
 
 | 环境 | 验证情况 |
 | --- | --- |
-| Windows，DSH 0.2.1-rc.3 | 2026-11-03 完成安装版运行时和真实客户端装载检查 |
-| Windows，DSH 0.2.1-rc.5 | 2026-11-03 完成安装版运行时和真实客户端装载检查 |
+| Windows，DSH 0.2.1-rc.3 | 插件 v0.2.0 完成运行检查，v0.3.0 等待验证 |
+| Windows，DSH 0.2.1-rc.5 | 2026-11-04 完成 v0.3.0 真实运行时、客户端及 30 FPS 播放检查 |
 | DSH 0.2.1-rc.4 | 等待验证 |
 | 其他系统和版本 | 等待验证 |
 
 已检查工资递增、倒计时递减、参数保存与落盘、浅色和深色画面、点击反馈、插件列表图标，以及 API 访问鉴权。费用数学和去重使用合成记录验证。
+
+人物使用 WebGL 小网格在姿态间插值，画布最多为 224 × 224 像素，复用的 672 × 672 RGBA 纹理约为 1.72 MiB。浏览器、GPU 上下文和宿主还有额外占用。WebGL 不可用时显示静态人物。[运行检查记录](docs/animation-validation.md)
 
 ## 数据与插件管理
 
@@ -90,7 +93,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.2.1
 
 ## 图片与鸣谢
 
-角色立绘和六帧吃饭素材根据社区“大肥鱼”鲸鱼娘形象，使用内置生图工具生成。立绘包含抱碗装乖、埋头扒饭、偷吃被抓现行，动画按舀饭、抬手送饭、进嘴和咀嚼的顺序循环。
+角色立绘与九姿态动作素材根据社区“大肥鱼”鲸鱼娘形象，使用内置生图工具生成。动画在吃饭过程中穿插偷瞄、护碗、擦嘴、满足和打盹。
 
 角色参考包括《吃白饭的大肥鱼》《蓝色大肥鱼表情包》《家里来了个吃白饭的大肥鱼》等二创，感谢社区创作者的形象和表达。插件介绍结构参考 dsh-pet 和 dsh-sidebar-qa。[吃白饭的大肥鱼](https://www.bilibili.com/video/BV1JFtZ6iEpt/)、[蓝色大肥鱼表情包](https://www.bilibili.com/video/BV1V88G6TEvg/)、[家里来了个吃白饭的大肥鱼](https://www.bilibili.com/video/BV1bXHW66Es5/)、[dsh-pet](https://github.com/PC2005-cloud/dsh-pet)、[dsh-sidebar-qa](https://github.com/ChenRuoT/dsh-sidebar-qa)
 

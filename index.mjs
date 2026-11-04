@@ -82,8 +82,8 @@ export async function apply(ctx) {
   ctx.effect(() => () => Promise.all([writes, configWrites, viewWrites]), 'salary-meter: drain data writes');
 
   const assets = new Map([
-    ['/api/salary-meter/mascot.png', ['assets/whale-girl-poses.png', 'image/png']],
-    ['/api/salary-meter/eating.png', ['assets/whale-girl-eating.png', 'image/png']],
+    ['/api/salary-meter/actions.png', ['assets/whale-girl-actions.png', 'image/png']],
+    ['/api/salary-meter/mascot.mjs', ['assets/mascot.mjs', 'text/javascript; charset=utf-8']],
     ['/api/salary-meter/widget.css', ['assets/widget.css', 'text/css; charset=utf-8']],
     ['/api/salary-meter/core.mjs', ['core.mjs', 'text/javascript; charset=utf-8']],
     ['/api/salary-meter/settings', ['assets/settings.html', 'text/html; charset=utf-8']],

@@ -1,6 +1,6 @@
 {
   "name": "dsh-salary-meter",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "打工养肥鱼，实时工资、下班倒计时和模型饭钱估算",
   "type": "module",
   "main": "./index.mjs",
@@ -12,7 +12,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["index.mjs", "core.mjs", "client.js", "assets", "docs/images", "icon.svg", "locale", "cordis.patch.yml", "README.md"],
+  "files": ["index.mjs", "core.mjs", "client.js", "assets/mascot.mjs", "assets/whale-girl-actions.png", "assets/widget.css", "assets/settings.html", "docs/images", "docs/animation-validation.md", "icon.svg", "locale", "cordis.patch.yml", "README.md"],
   "scripts": { "test": "node --test core.test.mjs" },
   "engines": { "node": ">=22" },
   "repository": { "type": "git", "url": "git+https://github.com/Jiang-Xiaoxing/dsh-salary-meter.git" },
@@ -21,7 +21,7 @@
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-slots"], "external": ["react", "@deepseek-ai/dsh-client-ui-primitives"] },
-    "compatibility": { "dshReleases": { "0.2.1-rc.3": "compatible", "0.2.1-rc.4": "unknown", "0.2.1-rc.5": "compatible" } }
+    "compatibility": { "dshReleases": { "0.2.1-rc.3": "unknown", "0.2.1-rc.4": "unknown", "0.2.1-rc.5": "compatible" } }
   },
   "license": "MIT"
 }

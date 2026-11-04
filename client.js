@@ -6,6 +6,33 @@ window.__ModuleLoader__.load({
     const { Button } = require('@deepseek-ai/dsh-client-ui-primitives');
     let core;
 
+    function WhaleMascot({ caught, busy, onAction }) {
+      const canvas = useRef(null);
+      const controller = useRef(null);
+      const current = useRef({ caught, busy });
+      current.current = { caught, busy };
+      const [failed, setFailed] = useState(false);
+      useEffect(() => {
+        const abort = new AbortController();
+        import('/api/salary-meter/mascot.mjs').then(({ createWhaleAnimation }) => {
+          if (abort.signal.aborted) return;
+          return createWhaleAnimation(canvas.current, { signal: abort.signal, onAction, onError: () => setFailed(true) });
+        }).then(value => {
+          if (!value) return;
+          if (abort.signal.aborted) { value.dispose(); return; }
+          controller.current = value;
+          value.setBusy(current.current.busy);
+          if (current.current.caught) value.catch();
+        }).catch(error => { if (!abort.signal.aborted) { console.error('[salary-meter] animation unavailable', error.message); setFailed(true); } });
+        return () => { abort.abort(); controller.current?.dispose(); controller.current = null; };
+      }, []);
+      useEffect(() => { if (caught) controller.current?.catch(); }, [caught]);
+      useEffect(() => { controller.current?.setBusy(busy); }, [busy]);
+      return failed
+        ? h('img', { src: '/api/salary-meter/actions.png', alt: '' })
+        : h('canvas', { ref: canvas, width: 224, height: 224, 'aria-hidden': true });
+    }
+
     function SalaryWidget() {
       const [snapshot, setSnapshot] = useState(null);
       const [now, setNow] = useState(Date.now());
@@ -13,6 +40,7 @@ window.__ModuleLoader__.load({
       const [caughtUntil, setCaughtUntil] = useState(0);
       const [settingsOpen, setSettingsOpen] = useState(false);
       const [savingView, setSavingView] = useState(false);
+      const [mascotAction, setMascotAction] = useState('idle');
       const dialog = useRef(null);
       const widget = useRef(null);
       const drag = useRef(null);
@@ -130,6 +158,7 @@ window.__ModuleLoader__.load({
       const amount = wage.earned - expenses;
       const recentExpense = now >= snapshot.lastExpenseAt && now - snapshot.lastExpenseAt < 4000;
       const pose = now < caughtUntil ? 'caught' : 'eat';
+      const messages = { idle: '再吃一口就收工。', scoop: '饭钱到账，开饭。', bite: '我就吃一小口。', chew: '嚼嚼嚼…', peek: '你还在忙呀？', caught: '饭自己跑嘴里的。', wipe: '一点都没浪费。', full: '今天也吃饱啦。', sleep: '抱着饭碗歇一会儿…' };
       const expanded = snapshot.view.expanded;
       const clockText = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
       const money = value => value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -160,10 +189,10 @@ window.__ModuleLoader__.load({
           h('small', null, partial ? '≤ ¥' : '≈ ¥'), h('span', { style: { '--sm-digits': money(amount).length } }, money(amount)),
           h(Button, { className: 'sm-toggle', size: 'sm', variant: 'ghost', disabled: savingView, 'aria-label': expanded ? '收起人物' : '展开人物', 'aria-expanded': expanded, 'aria-controls': 'salary-meter-character', onClick: toggleView }, expanded ? '收起 ⌄' : '展开 ⌃')),
         expanded && h('div', { id: 'salary-meter-character' },
-          // The mascot uses a custom image surface for its animation frames.
+          // The canvas owns its 30 FPS clock; the salary UI does not re-render per frame.
           h('button', { className: `sm-mascot sm-${pose}`, title: '发现她偷吃', 'aria-label': '发现鲸鱼娘偷吃', onClick: () => setCaughtUntil(Date.now() + 2500) },
-            h('img', { className: pose === 'eat' ? 'sm-eating-sprite' : '', src: pose === 'eat' ? '/api/salary-meter/eating.png' : '/api/salary-meter/mascot.png', alt: '' })),
-          h('div', { className: 'sm-bubble' }, pose === 'caught' ? '饭自己跑嘴里的。' : snapshot.active > 0 || recentExpense ? '我就吃一小口。' : '再吃一口就收工。')),
+            h(WhaleMascot, { caught: pose === 'caught', busy: snapshot.active > 0 || recentExpense, onAction: setMascotAction })),
+          h('div', { className: 'sm-bubble' }, pose === 'caught' ? messages.caught : messages[mascotAction] || messages.idle)),
         h('div', { className: 'sm-worktime' },
           h('div', { className: 'sm-worktime-row' },
             h('span', null, wage.countdownLabel, ' ', h('b', null, wage.countdownSeconds > 0 ? core.formatDuration(wage.countdownSeconds) : '')),

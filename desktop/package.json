@@ -1,6 +1,6 @@
 {
   "name": "salary-widget",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "桌面工资计价器 · 悬浮挂件",
   "main": "main.js",
   "scripts": {

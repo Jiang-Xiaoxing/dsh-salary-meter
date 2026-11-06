@@ -27,6 +27,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     statusTitle: pick('statusTitle'),
     clock: pick('clockText'),
     balance: pick('balanceRow'),
+    arrow: pick('balanceArrow'),
     prefix: pick('balancePrefix'),
     value: pick('balanceValue'),
     toggle: pick('toggleBtn'),
@@ -203,6 +204,8 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   }
 
   function bigFlash(dir, hold) {
+    // 箭头字符由 JS 定住，撤掉 class 时保持最后的方向淡出，不会跳回 ▲
+    el.arrow.textContent = dir === 'up' ? '▲' : '▼';
     el.balance.classList.remove('up', 'down');
     void el.balance.offsetWidth;
     el.balance.classList.add(dir);
@@ -211,34 +214,27 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   }
 
   function tickMoney(amount, now) {
-    const day = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
-    if (day !== lastDay) {
-      // 跨天（含隔夜休眠醒来）：工资归零是规则不是扣钱，只重建基准
-      lastDay = day;
-      lastAmount = amount;
-      greenMark = amount;
-      clearMoneyFx();
-      return;
-    }
     const prev = lastAmount;
     lastAmount = amount;
     if (prev === null || !basisReady) { greenMark = amount; return; }
     const delta = amount - prev;
     if (Math.abs(delta) < 0.0005) return;
 
-    // paint 是 100ms 一次；金额涨得快的配置下别把 200ms 的滚动反复打断
-    const stamp = performance.now();
-    if (stamp - lastAnimAt < 140) return;
-    lastAnimAt = stamp;
-
     el.value.classList.remove('roll-up', 'roll-down');
     void el.value.offsetWidth;
     el.value.classList.add(delta > 0 ? 'roll-up' : 'roll-down');
 
     if (delta < 0) {
+      // 扣钱不节流——这次漏掉就永远补不回来了
       greenMark = amount;
       bigFlash('down', 2400);
-    } else if (greenMark === null || amount - greenMark >= 0.1) {
+      return;
+    }
+    // 涨钱才节流：paint 是 100ms 一次，金额涨得快的配置下别把 200ms 的滚动反复打断
+    const stamp = performance.now();
+    if (stamp - lastAnimAt < 140) return;
+    lastAnimAt = stamp;
+    if (greenMark === null || amount - greenMark >= 0.1) {
       greenMark = amount;
       bigFlash('up', 1600);
     }
@@ -250,17 +246,28 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     const partial = today.unknown > 0;
     const amount = wage.earned - today.expense;
 
+    // 跨天（含隔夜休眠醒来）：工资归零是规则不是扣钱。每次都查，不能只在金额变化时查
+    const dayKey = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
+    if (dayKey !== lastDay) {
+      lastDay = dayKey;
+      lastAmount = null;
+      greenMark = null;
+      clearMoneyFx();
+    }
+
     el.statusTitle.textContent = '今日账目';
     el.statusTitle.title = wage.status.replace(/\s/g, '');
     el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 
     const text = (amount < 0 ? '−' : '') + money(Math.abs(amount));
     el.prefix.textContent = partial ? '≤ ¥' : '¥';
-    if (el.value.textContent !== text) {
+    const changed = el.value.textContent !== text;
+    if (changed) {
       el.value.textContent = text;
       el.value.style.setProperty('--sm-digits', text.length);
-      tickMoney(amount, now);
     }
+    // 文本没变也要跑一次：首屏真实数据和默认值一样时，基准还没建
+    if (changed || lastAmount === null) tickMoney(amount, now);
 
     el.countdown.innerHTML = wage.countdownSeconds > 0
       ? wage.countdownLabel + ' <b>' + duration(wage.countdownSeconds) + '</b>'

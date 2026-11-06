@@ -41,10 +41,17 @@ test('费用区分缓存和空闲时段，未知路由保持未知', () => {
   const route = { provider: 'deepseek-official', model: 'deepseek-flash' };
   assert.equal(estimateExpense(usage, route, at('15:30:00').getTime()), 10.04);
   assert.equal(estimateExpense(usage, route, at('20:30:00').getTime()), 5.02);
-  assert.equal(estimateExpense(usage, { ...route, provider: 'other' }, Date.now()), null);
+  assert.equal(estimateExpense(usage, { provider: 'opencode-go', model: 'deepseek-flash' }, at('20:30:00').getTime()), 5.02);
+  assert.equal(estimateExpense(usage, { provider: 'opencode-go', model: 'glm-5.3' }, at('20:30:00').getTime()), 38);
+  assert.equal(estimateExpense(usage, { provider: 'opencode-go', model: 'step-5-preview' }, at('15:30:00').getTime()), 27.7);
+  assert.ok(Math.abs(estimateExpense(usage, { model: 'gpt-5.1' }, at('15:30:00').getTime()) - 81.33125) < 1e-6);
+  assert.ok(Math.abs(estimateExpense(usage, { model: 'kimi-k3' }, at('15:30:00').getTime()) - 122) < 1e-6);
+  assert.ok(Math.abs(estimateExpense(usage, { model: 'qwen3.8-max' }, at('15:30:00').getTime()) - 49.2) < 1e-6);
+  assert.ok(Math.abs(estimateExpense(usage, { model: 'gpt-5.1-2026-08-07' }, at('15:30:00').getTime()) - 81.33125) < 1e-6);
+  assert.equal(estimateExpense(usage, { provider: 'other' }, Date.now()), 0);
   assert.equal(chinaDay(at('00:00:00').getTime()), '2026-11-03');
 });
-test('刷新与重新加载同一记录不重复计费，未知路由单独计数', () => {
+test('刷新与重新加载同一记录不重复计费，未知 DeepSeek 模型才计遗漏', () => {
   const ledger = { days: {}, positions: {}, lastExpenseAt: 0 };
   const event = { seq: 18, time: Date.now(), type: 'assistant/message', data: { stream: [{ type: 'chunk', chunk: { type: 'usage', usage: { inputTokens: 1000 } } }] } };
   const route = { provider: 'deepseek-official', model: 'deepseek-flash' };
@@ -53,5 +60,7 @@ test('刷新与重新加载同一记录不重复计费，未知路由单独计�
   assert.equal(recordExpense(persisted, 'session-1', event, route), false);
   assert.equal(persisted.days[chinaDay(event.time)].known, 1);
   recordExpense(persisted, 'session-2', event, { provider: 'unknown' });
+  assert.equal(persisted.days[chinaDay(event.time)].unknown, 0);
+  recordExpense(persisted, 'session-3', event, { provider: 'deepseek-official', model: 'deepseek-unknown-x' });
   assert.equal(persisted.days[chinaDay(event.time)].unknown, 1);
 });

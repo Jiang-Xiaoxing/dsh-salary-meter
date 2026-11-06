@@ -75,17 +75,90 @@ export function chinaDay(time) {
 // CNY per million tokens, verified against the official pricing page on 2026-11-03.
 // Weekday peak periods are estimated from the clock. Public-holiday adjustments,
 // search/fetch charges, auxiliary model calls, and third-party tariffs are excluded.
-const PRICES = {
+// Priced by model, not by route: the same model through the official account or a
+// gateway (for example opencode-go) is folded in at the same official rate.
+// CNY per million tokens. USD vendors converted at 7.15. Checked 2026-11-06.
+// Only DeepSeek has the peak/off-peak 0.5x discount; everything else is billed flat.
+const USD = 7.15; // 美元价 × 汇率
+const DEFAULT_PRICES = {
+  // DeepSeek（人民币）
   'deepseek-flash': [2, 0.04, 8],
   'deepseek-v4-flash': [2, 0.04, 8],
+  'deepseek-v4.1-flash': [2, 0.04, 8],
   'deepseek-v4-flash-vision-exp': [2, 0.04, 8],
   'deepseek-v4-pro': [9, 0.3, 27],
+  // 智谱 GLM（人民币）
+  'glm-5.3': [8, 2, 28],
+  'glm-5.3-flash': [0.8, 0.23, 2.8],
+  'glm-5.3-flashx': [2, 0.57, 7],
+  // 阶跃 Step（人民币）
+  'step-5-preview': [7, 0.7, 20],
+  // Kimi（人民币）
+  'kimi-k3': [20, 2, 100],
+  // 通义 Qwen（人民币）
+  'qwen3.8-max': [12, 1.2, 36],
+  'qwen3.7-max': [12, 1.2, 36],
+  'qwen3.8-flash': [0.8, 0.08, 2.7],
+  'qwen3.7-flash': [0.2, 0.02, 0.8],
+  // MiniMax（人民币）
+  'minimax-m3': [2.1, 0.42, 8.4],
+  'minimax-m3.1-flash': [1, 0.1, 4],
+  // OpenAI（美元 → 人民币）
+  'gpt-5.1': [1.25 * USD, 0.125 * USD, 10 * USD],
+  'gpt-5': [1.25 * USD, 0.125 * USD, 10 * USD],
+  'gpt-5-mini': [0.25 * USD, 0.025 * USD, 2 * USD],
+  'gpt-5-nano': [0.05 * USD, 0.005 * USD, 0.4 * USD],
+  'gpt-5.2': [1.75 * USD, 0.175 * USD, 14 * USD],
+  'gpt-5.4': [2.5 * USD, 0.25 * USD, 15 * USD],
+  'gpt-4.1': [2 * USD, 0.5 * USD, 8 * USD],
+  'gpt-4o': [2.5 * USD, 1.25 * USD, 10 * USD],
+  'o3': [2 * USD, 0.5 * USD, 8 * USD],
+  // Anthropic Claude（美元 → 人民币）
+  'claude-opus-5.5': [4 * USD, 0.2 * USD, 20 * USD],
+  'claude-opus-5': [5 * USD, 0.5 * USD, 25 * USD],
+  'claude-sonnet-5.5': [2 * USD, 0.1 * USD, 10 * USD],
+  'claude-sonnet-5': [2 * USD, 0.2 * USD, 10 * USD],
+  'claude-sonnet-4.5': [3 * USD, 0.3 * USD, 15 * USD],
+  'claude-haiku-4.5': [1 * USD, 0.1 * USD, 5 * USD],
+  // Google Gemini（美元 → 人民币）
+  'gemini-3.1-pro-preview': [2 * USD, 0.2 * USD, 12 * USD],
+  // xAI Grok（美元 → 人民币）
+  'grok-4.7': [2 * USD, 0.5 * USD, 6 * USD],
+  'grok-4.6': [2 * USD, 0.5 * USD, 6 * USD],
+  'grok-4.5': [2 * USD, 0.3 * USD, 6 * USD],
+  'grok-4.3': [1.25 * USD, 0.2 * USD, 2.5 * USD],
 };
 
+let PRICES = { ...DEFAULT_PRICES };
+
+export function defaultPrices() {
+  return { ...DEFAULT_PRICES };
+}
+
+export function setPrices(table) {
+  const next = { ...DEFAULT_PRICES };
+  for (const [model, price] of Object.entries(table ?? {})) {
+    if (Array.isArray(price) && price.length === 3 && price.every(value => Number.isFinite(value) && value >= 0)) {
+      next[String(model).toLowerCase()] = price.slice(0, 3);
+    }
+  }
+  PRICES = next;
+}
+
+// 模型名带日期/版本后缀时也能匹配，例如 gpt-5.1-2026-08-07 → gpt-5.1
+function priceOf(model) {
+  if (!model) return null;
+  const key = String(model).toLowerCase();
+  if (PRICES[key]) return PRICES[key];
+  const base = key.replace(/-(20\d{2}[-.]\d{2}[-.]\d{2})(?:-.*)?$/, '');
+  return PRICES[base] ?? null;
+}
+
 export function estimateExpense(usage, route, time) {
-  if (!['deepseek-official', 'deepseek-account'].includes(route?.provider)) return null;
-  const price = PRICES[route.model];
-  if (!price) return null;
+  const model = route?.model;
+  if (!model) return 0;
+  const price = priceOf(model);
+  if (!price) return String(model).startsWith('deepseek') ? null : 0;
   const tokens = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'].map(key => usage[key] ?? 0);
   if (tokens.some(value => !Number.isSafeInteger(value) || value < 0)) return null;
   const [input, output, cached, written] = tokens;
@@ -93,7 +166,8 @@ export function estimateExpense(usage, route, time) {
   const weekday = beijing.getUTCDay();
   const hour = beijing.getUTCHours() + beijing.getUTCMinutes() / 60;
   const peak = weekday > 0 && weekday < 6 && ((hour >= 9 && hour < 12) || (hour >= 14 && hour < 18));
-  return ((input + written) * price[0] + cached * price[1] + output * price[2]) / 1e6 * (peak ? 1 : 0.5);
+  const discount = model.startsWith('deepseek') ? (peak ? 1 : 0.5) : 1;
+  return ((input + written) * price[0] + cached * price[1] + output * price[2]) / 1e6 * discount;
 }
 
 export function usageFromEvent(event) {

@@ -66,18 +66,20 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.0
 
 ## 费用统计范围
 
-费用使用 DSH 已提交的会话使用记录，支持 `deepseek-official` 和 `deepseek-account` 路由下的 `deepseek-flash`、`deepseek-v4-flash`、`deepseek-v4-flash-vision-exp`、`deepseek-v4-pro`。币种为人民币，价格核对日期为 2026-11-03，依据 DeepSeek 官方价格页。
+费用使用 DSH 已提交的会话使用记录，内置 36 个模型的价格：DeepSeek、OpenAI、Anthropic Claude、Google Gemini、xAI Grok、智谱 GLM、通义 Qwen、Kimi、MiniMax 和阶跃 Step。币种为人民币，外国厂商按 7.15 汇率折算，价格核对日期为 2026-11-06。
+
+价格表会在插件启动时、以及之后每 24 小时从仓库读取最新版本（依次尝试 jsDelivr 和 GitHub 原始文件），拉取失败时使用本地缓存或内置价格，不影响显示。维护者更新仓库里的 `prices.json` 后，用户下次打开 DSH 即可用上新价。只有 DeepSeek 计算工作日峰谷折扣，其他模型按原价。
 
 统计覆盖插件启用期间的调用，以及当前已加载会话中当天的使用记录。记录按会话和事件序号去重，重开界面后继续使用已保存的统计。
 
-工作日高峰和空闲时段按北京时间估算。当前统计范围未包含中国法定节假日价格调整、搜索与抓取费用、辅助模型调用，以及第三方模型和渠道价格。账单核对请使用服务商提供的记录。[DeepSeek 官方价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+费用不包含中国法定节假日价格调整、搜索与抓取费用、辅助模型调用，以及价格表里没有的模型；这类调用会直接跳过，不标为遗漏。账单核对请使用服务商提供的记录。
 
 ## 兼容性
 
 | 环境 | 验证情况 |
 | --- | --- |
 | Windows，DSH 0.2.1-rc.3 | 插件 v0.2.0 完成运行检查，v0.3.0 等待验证 |
-| Windows，DSH 0.2.1-rc.5 | 2026-11-04 完成 v0.3.0 真实运行时、客户端及 30 FPS 播放检查 |
+| Windows，DSH 0.2.1-rc.5 | 2026-11-04 完成 v0.3.0 真实运行时、客户端及 30 FPS 播放检查；2026-11-06 v0.3.1 价格表与计价修复通过单元测试，待真实运行时验证 |
 | DSH 0.2.1-rc.4 | 等待验证 |
 | 其他系统和版本 | 等待验证 |
 

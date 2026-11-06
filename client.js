@@ -3,6 +3,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react');
     const { createElement: h, useState, useEffect, useRef } = React;
+    const { createPortal } = require('react-dom');
     const { Button } = require('@deepseek-ai/dsh-client-ui-primitives');
     let core;
 
@@ -89,8 +90,18 @@ window.__ModuleLoader__.load({
           setSnapshot(previous => previous.revision > revision ? previous : { ...previous, config, revision });
           dialog.current.close();
         }
+        function savedTheme(event) {
+          const frame = dialog.current?.querySelector('iframe');
+          if (event.origin !== location.origin || event.source !== frame?.contentWindow || event.data?.type !== 'salary-meter:theme') return;
+          const theme = ['light', 'gold'].includes(event.data.theme) ? event.data.theme : 'dark';
+          fetch('/api/salary-meter/view', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme }) })
+            .then(response => response.json())
+            .then(value => setSnapshot(previous => previous ? { ...previous, view: value } : previous))
+            .catch(() => {});
+        }
         window.addEventListener('message', savedSettings);
-        return () => window.removeEventListener('message', savedSettings);
+        window.addEventListener('message', savedTheme);
+        return () => { window.removeEventListener('message', savedSettings); window.removeEventListener('message', savedTheme); };
       }, []);
       useEffect(() => {
         if (!snapshot) return;
@@ -150,7 +161,7 @@ window.__ModuleLoader__.load({
       }
 
       if (!snapshot || !core) {
-        return h('section', { 'data-salary-meter': true, className: 'sm-widget', role: 'status' }, error || '正在读取工资与饭钱…');
+        return createPortal(h('section', { 'data-salary-meter': true, className: 'sm-widget', role: 'status' }, error || '正在读取工资与饭钱…'), document.body);
       }
       const wage = core.computeWage(snapshot.config, new Date(now));
       const expenses = snapshot.today.expense;
@@ -160,11 +171,17 @@ window.__ModuleLoader__.load({
       const pose = now < caughtUntil ? 'caught' : 'eat';
       const messages = { idle: '再吃一口就收工。', scoop: '饭钱到账，开饭。', bite: '我就吃一小口。', chew: '嚼嚼嚼…', peek: '你还在忙呀？', caught: '饭自己跑嘴里的。', wipe: '一点都没浪费。', full: '今天也吃饱啦。', sleep: '抱着饭碗歇一会儿…' };
       const expanded = snapshot.view.expanded;
+      const theme = ['light', 'gold'].includes(snapshot.view.theme) ? snapshot.view.theme : 'dark';
+      const palette = theme === 'light'
+        ? { '--sm-bg': '#f7f8fa', '--sm-text': '#1f2329', '--sm-muted': '#6b7280', '--sm-line': '#00000014', '--dsw-specific-bubble': '#dfe7f7' }
+        : theme === 'gold'
+          ? { '--sm-bg': '#1f1a13', '--sm-text': '#d6b36a', '--sm-muted': '#9c8a63', '--sm-line': '#ffffff14', '--dsw-specific-bubble': '#3a2f1d', '--sm-blue': '#c9a227' }
+          : { '--sm-bg': '#232324', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c' };
       const clockText = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
       const money = value => value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const expenseText = expenses > 0 && expenses < 0.01 ? expenses.toFixed(4) : money(expenses);
       const feeDescription = '按已识别的 DeepSeek 官方模型 token 和 2026-11-03 单价估算。节假日调整、搜索抓取、辅助调用和第三方模型费用未纳入。';
-      return h('section', { ref: widget, 'data-salary-meter': true, 'data-expanded': expanded, className: 'sm-widget', 'aria-label': '打工养肥鱼' },
+      return createPortal(h('section', { ref: widget, 'data-salary-meter': true, 'data-expanded': expanded, 'data-theme': theme, className: 'sm-widget', 'aria-label': '打工养肥鱼', style: palette },
         h('div', { className: 'sm-top',
           onPointerDown: event => {
             if (event.target.closest('button')) return;
@@ -184,7 +201,7 @@ window.__ModuleLoader__.load({
         },
           h('span', { className: 'sm-title', title: wage.status }, '碗里还剩'),
           h('time', { className: 'sm-clock' }, clockText),
-          h(Button, { size: 'sm', variant: 'ghost', title: '工资参数设置', 'aria-label': '工资参数设置', onClick: () => setSettingsOpen(true) }, '⋯')),
+          h(Button, { size: 'sm', variant: 'ghost', title: '设置', 'aria-label': '设置', onClick: () => setSettingsOpen(true) }, '⋯')),
         h('div', { className: 'sm-balance', title: partial ? '部分调用费用待支持，余额为上限估算' : '当日工资减去已统计的模型费用估算' },
           h('small', null, partial ? '≤ ¥' : '≈ ¥'), h('span', { style: { '--sm-digits': money(amount).length } }, money(amount)),
           h(Button, { className: 'sm-toggle', size: 'sm', variant: 'ghost', disabled: savingView, 'aria-label': expanded ? '收起人物' : '展开人物', 'aria-expanded': expanded, 'aria-controls': 'salary-meter-character', onClick: toggleView }, expanded ? '收起 ⌄' : '展开 ⌃')),
@@ -204,7 +221,7 @@ window.__ModuleLoader__.load({
         error && h('p', { className: 'sm-error', role: 'alert' }, error),
         settingsOpen && h('dialog', { ref: dialog, className: 'sm-settings', onClose: () => setSettingsOpen(false) },
           h('button', { className: 'sm-close', 'aria-label': '关闭参数设置', onClick: () => dialog.current.close() }, '×'),
-          h('iframe', { src: '/api/salary-meter/settings', title: '工资参数设置' })));
+          h('iframe', { src: '/api/salary-meter/settings', title: '设置' }))), document.body);
     }
 
     return {

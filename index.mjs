@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_CONFIG, validateConfig, chinaDay, recordExpense } from './core.mjs';
+import { DEFAULT_CONFIG, validateConfig, chinaDay, recordExpense, setPrices } from './core.mjs';
 
 export const name = 'salary-meter';
 export const inject = ['connection', 'sessions'];
@@ -43,8 +43,34 @@ export async function apply(ctx) {
   }
   saved.config = validateConfig(saved.config);
   const savedView = await readJson(viewFile, null);
-  let view = { expanded: savedView?.expanded === true, revision: savedView?.revision ?? 0 };
+  let view = { expanded: savedView?.expanded === true, theme: ['light', 'gold'].includes(savedView?.theme) ? savedView.theme : 'dark', revision: savedView?.revision ?? 0 };
   const ledger = await readJson(ledgerFile, { days: {}, positions: {}, lastExpenseAt: 0 });
+  const priceCacheFile = join(root, 'prices-cache.json');
+  async function refreshPrices() {
+    try {
+      const cached = await readJson(priceCacheFile, null);
+      if (cached?.prices) setPrices(cached.prices);
+    } catch { /* 缓存损坏就用内置价 */ }
+    const sources = [
+      'https://cdn.jsdelivr.net/gh/Jiang-Xiaoxing/dsh-salary-meter@main/prices.json',
+      'https://raw.githubusercontent.com/Jiang-Xiaoxing/dsh-salary-meter/main/prices.json',
+    ];
+    for (const source of sources) {
+      try {
+        const response = await fetch(source, { signal: AbortSignal.timeout(5000) });
+        if (!response.ok) continue;
+        const body = await response.json();
+        if (body?.prices && typeof body.prices === 'object') {
+          setPrices(body.prices);
+          await atomicJson(priceCacheFile, { fetchedAt: Date.now(), prices: body.prices }).catch(() => {});
+          return;
+        }
+      } catch { /* 换下一个源 */ }
+    }
+  }
+  refreshPrices().catch(() => {});
+  const priceTimer = setInterval(() => { refreshPrices().catch(() => {}); }, 24 * 3600_000);
+  ctx.effect(() => () => clearInterval(priceTimer), 'salary-meter: refresh prices');
   const sessions = new WeakMap();
   const active = new Set();
   let writes = Promise.resolve();
@@ -70,7 +96,10 @@ export async function apply(ctx) {
     let changed = false;
     for (const event of session.snapshotEvents(cursor.seq)) {
       cursor.seq = event.seq + 1;
-      if (event.type === 'request/header') cursor.route = event.data.header?.config ?? null;
+      if (event.type === 'request/header') {
+        const config = event.data.header?.config;
+        if (config?.model) cursor.route = config;
+      }
       if (event.seq < session.inheritedEventCount) continue;
       if (event.type === 'turn/start') active.add(session.id);
       if (event.type === 'turn/end') active.delete(session.id);
@@ -135,9 +164,13 @@ export async function apply(ctx) {
       let body;
       try { body = JSON.parse(text); }
       catch { return Response.json({ error: '显示设置格式错误' }, { status: 400 }); }
-      if (typeof body?.expanded !== 'boolean') return Response.json({ error: '请选择收起或展开人物' }, { status: 400 });
+      if (typeof body?.expanded !== 'boolean' && !['dark', 'light', 'gold'].includes(body?.theme)) return Response.json({ error: '请选择收起或展开人物' }, { status: 400 });
       const operation = viewWrites.then(async () => {
-        const next = { expanded: body.expanded, revision: view.revision + 1 };
+        const next = {
+          expanded: typeof body?.expanded === 'boolean' ? body.expanded : view.expanded,
+          theme: ['dark', 'light', 'gold'].includes(body?.theme) ? body.theme : view.theme,
+          revision: view.revision + 1,
+        };
         await atomicJson(viewFile, next);
         view = next;
         return Response.json(view);

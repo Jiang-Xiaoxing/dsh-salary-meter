@@ -7,7 +7,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 (function () {
   'use strict';
 
-  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark', character: 'webm', petScale: 130, expanded: false };
+  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark', character: 'webm', petScale: 130, expanded: false };
 
   const PALETTES = {
     dark: { '--sm-bg': '#232324', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
@@ -120,6 +120,22 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   }
 
   /* -------------------------------------------------------------- 算工资 */
+  /* 休息制度：double 双休 / single 单休（只休周日）/ alternate 大小周（周六逢双周休）/ none 周末也上班 */
+  function weekIndex(d) {
+    const first = new Date(d.getFullYear(), 0, 1);
+    const days = Math.floor((d - first) / 86400000);
+    return Math.floor((days + first.getDay()) / 7);
+  }
+  function restOn(d) {
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) return false;
+    // 老配置只有 weekend 布尔值，没写 restMode 时按它换算
+    const mode = cfg.restMode || (cfg.weekend ? 'none' : 'double');
+    if (mode === 'none') return false;
+    if (mode === 'single') return wd === 0;
+    if (mode === 'alternate') return wd === 0 || weekIndex(d) % 2 === 0;
+    return true;
+  }
 
   function computeWage(now) {
     const start = hm(cfg.start);
@@ -129,7 +145,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     const lunchStart = Math.max(start, Math.min(12 * 3600, end - lunch));
     const clock = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
     const weekday = now.getDay();
-    const rest = !cfg.weekend && (weekday === 0 || weekday === 6);
+    const rest = restOn(now);
     const elapsed = Math.max(0, Math.min(clock, end) - start);
     const lunchElapsed = Math.max(0, Math.min(lunch, clock - lunchStart));
     const billable = rest ? 0 : Math.max(0, Math.min(workSeconds, elapsed - lunchElapsed));
@@ -259,8 +275,10 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     el.statusTitle.title = wage.status.replace(/\s/g, '');
     el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 
-    const text = (amount < 0 ? '−' : '') + money(Math.abs(amount));
-    el.prefix.textContent = partial ? '≤ ¥' : '¥';
+    const negative = amount < 0;
+    const text = money(Math.abs(amount));
+    // 负号放在 ¥ 前面（−¥0.85），不要 ¥ −0.85
+    el.prefix.textContent = (negative ? '−' : '') + (partial ? '≤ ¥' : '¥');
     const changed = el.value.textContent !== text;
     if (changed) {
       el.value.textContent = text;

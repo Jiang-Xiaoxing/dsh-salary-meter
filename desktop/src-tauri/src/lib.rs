@@ -28,6 +28,8 @@ struct Config {
     end: String,
     lunch: f64,
     weekend: bool,
+    #[serde(rename = "restMode", default)]
+    rest_mode: String,
     theme: String,
     character: String,
     #[serde(rename = "petScale")]
@@ -44,6 +46,7 @@ impl Default for Config {
             end: "18:00".to_string(),
             lunch: 1.0,
             weekend: false,
+            rest_mode: "double".to_string(),
             theme: "dark".to_string(),
             character: "webm".to_string(),
             pet_scale: 130.0,
@@ -114,6 +117,9 @@ fn migrate_plugin_config() -> Option<Config> {
     }
     if let Some(v) = raw.get("weekend").and_then(|v| v.as_bool()) {
         cfg.weekend = v;
+    }
+    if let Some(v) = raw.get("restMode").and_then(|v| v.as_str()) {
+        cfg.rest_mode = v.to_string();
     }
     if let Ok(text) = fs::read_to_string(plugin_data_dir().join("view.json")) {
         if let Ok(view) = serde_json::from_str::<serde_json::Value>(&text) {
@@ -260,6 +266,14 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
     }
     if let Some(v) = patch.get("weekend").and_then(|v| v.as_bool()) {
         cfg.weekend = v;
+    }
+    if let Some(v) = patch.get("restMode").and_then(|v| v.as_str()) {
+        cfg.rest_mode = match v {
+            "single" => "single".to_string(),
+            "alternate" => "alternate".to_string(),
+            "none" => "none".to_string(),
+            _ => "double".to_string(),
+        };
     }
     if let Some(v) = patch.get("theme").and_then(|v| v.as_str()) {
         cfg.theme = match v {

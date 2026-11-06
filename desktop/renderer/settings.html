@@ -113,6 +113,7 @@
   .seg button.on{background:#211E19;color:#F4F0E6}
   .seg button.on:hover{background:#211E19}
   .seg.two{grid-template-columns:1fr 1fr}
+  .seg.three{grid-template-columns:1fr 1fr 1fr}
 
   /* 数据条 */
   .stats{
@@ -210,10 +211,14 @@
     <input id="lunch" type="number" min="0" max="6" step="0.5" inputmode="decimal">
   </div>
 
-  <label class="check">
-    <input id="weekend" type="checkbox">
-    <span>周末也算上班</span>
-  </label>
+  <div class="field">
+    <label>休息制度</label>
+    <div class="seg three" id="segRest">
+      <button type="button" data-rest="double">双休</button>
+      <button type="button" data-rest="single">单休</button>
+      <button type="button" data-rest="alternate">大小周</button>
+    </div>
+  </div>
 
   <div class="field">
     <label>挂件外观</label>
@@ -267,7 +272,7 @@
 (function () {
   "use strict";
 
-  var DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark' };
+  var DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark' };
   // 设置页现在是主窗口里的浮层 iframe：优先用宿主窗口的 api，单独打开时才走兜底
   var hostApi = null;
   try { hostApi = (window.parent && window.parent !== window) ? window.parent.api : null; } catch (e) { hostApi = null; }
@@ -288,7 +293,6 @@
     start: document.getElementById('start'),
     end: document.getElementById('end'),
     lunch: document.getElementById('lunch'),
-    weekend: document.getElementById('weekend'),
     diag: document.getElementById('diag'),
     perSec: document.getElementById('perSec'),
     perHour: document.getElementById('perHour'),
@@ -302,6 +306,29 @@
   var cfg = Object.assign({}, DEF);
   var currentTheme = 'dark';
   var currentCharacter = 'webm';
+  var currentRest = 'double';
+
+  /* 休息制度：double 双休 / single 单休（只休周日）/ alternate 大小周（周六逢双周休） */
+  function weekIndex(d) {
+    var first = new Date(d.getFullYear(), 0, 1);
+    var days = Math.floor((d - first) / 86400000);
+    return Math.floor((days + first.getDay()) / 7);
+  }
+  function restOn(d, mode) {
+    var wd = d.getDay();
+    if (wd !== 0 && wd !== 6) return false;
+    if (mode === 'none') return false;
+    if (mode === 'single') return wd === 0;
+    if (mode === 'alternate') return wd === 0 || weekIndex(d) % 2 === 0;
+    return true;
+  }
+  function setRest(v) {
+    currentRest = (v === 'single' || v === 'alternate' || v === 'none') ? v : 'double';
+    var btns = document.querySelectorAll('#segRest button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', btns[i].getAttribute('data-rest') === currentRest);
+    }
+  }
 
   function setTheme(t) {
     currentTheme = (t === 'light' || t === 'gold') ? t : 'dark';
@@ -344,7 +371,7 @@
       start: el.start.value || '09:00',
       end: el.end.value || '18:00',
       lunch: Math.max(0, num(el.lunch.value, 0)),
-      weekend: el.weekend.checked,
+      restMode: currentRest,
       theme: currentTheme,
       character: currentCharacter,
       petScale: Number(document.getElementById("petScale").value)
@@ -366,13 +393,11 @@
     var now = new Date();
     var done = 0;
     for (var i = 1; i < now.getDate(); i++) {
-      var wd = new Date(now.getFullYear(), now.getMonth(), i).getDay();
-      if (wd !== 0 && wd !== 6) done++;
+      if (!restOn(new Date(now.getFullYear(), now.getMonth(), i), c.restMode)) done++;
     }
 
     var nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-    var wdToday = now.getDay();
-    var isRest = (wdToday === 0 || wdToday === 6) && !c.weekend;
+    var isRest = restOn(now, c.restMode);
     var L0 = 12 * 3600;
     if (L0 < ws) L0 = ws;
     if (L0 + c.lunch * 3600 > we) L0 = we - c.lunch * 3600;
@@ -400,8 +425,7 @@
     el.start.value = c.start;
     el.end.value = c.end;
     el.lunch.value = c.lunch;
-    el.weekend.checked = !!c.weekend;
-    setTheme(c.theme);
+    setRest(c.restMode || (c.weekend ? 'none' : 'double'));    setTheme(c.theme);
     setCharacter(c.character);
     document.getElementById("petScale").value = c.petScale || 130;
     document.getElementById("petScaleValue").textContent = (c.petScale || 130) + "%";
@@ -427,7 +451,13 @@
   ['salary', 'days', 'start', 'end', 'lunch'].forEach(function (k) {
     el[k].addEventListener('input', push);
   });
-  el.weekend.addEventListener('change', push);
+  var restBtns = document.querySelectorAll('#segRest button');
+  for (var r = 0; r < restBtns.length; r++) {
+    restBtns[r].addEventListener('click', function () {
+      setRest(this.getAttribute('data-rest'));
+      push();
+    });
+  }
 
   var segBtns = document.querySelectorAll('#seg button');
   for (var i = 0; i < segBtns.length; i++) {

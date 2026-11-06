@@ -80,7 +80,8 @@
         sx = null;
         sy = null;
         try {
-          window.__TAURI__.window.getCurrent().startDragging();
+          // Tauri 2 的全局 API 里叫 getCurrentWindow，不是 getCurrent
+          window.__TAURI__.window.getCurrentWindow().startDragging();
         } catch (err) { /* 老版本没有这个接口就退回不能拖，不影响点击 */ }
       });
       window.addEventListener('mouseup', function () {

@@ -57,5 +57,40 @@
     for (var i = 0; i < nodes.length; i++) {
       nodes[i].setAttribute('data-tauri-drag-region', '');
     }
+
+    /* 人物和账目条占了收起态的大半屏幕，它们必须是拖拽区。
+       但直接标成 data-tauri-drag-region 会把点击吞掉（人物点一下是偷吃动画，
+       账目条点一下是展开/收起），所以这里自己判断：按下后挪动超过 4px 才算拖窗口，
+       只是轻点就放行给原来的 click。 */
+    function draggable(node) {
+      if (!node) return;
+      var sx = null;
+      var sy = null;
+      var armed = false;
+      node.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        sx = e.screenX;
+        sy = e.screenY;
+        armed = true;
+      });
+      window.addEventListener('mousemove', function (e) {
+        if (!armed || sx === null) return;
+        if (Math.abs(e.screenX - sx) < 4 && Math.abs(e.screenY - sy) < 4) return;
+        armed = false;
+        sx = null;
+        sy = null;
+        try {
+          window.__TAURI__.window.getCurrent().startDragging();
+        } catch (err) { /* 老版本没有这个接口就退回不能拖，不影响点击 */ }
+      });
+      window.addEventListener('mouseup', function () {
+        armed = false;
+        sx = null;
+        sy = null;
+      });
+    }
+
+    draggable(document.querySelector('.sm-mascot'));
+    draggable(document.getElementById('balanceRow'));
   });
 })();

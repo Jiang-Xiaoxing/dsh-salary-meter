@@ -21,7 +21,7 @@
   /* 窗口 = 胶囊 + 四周 10px 透明边，给投影留位置；样式与 DS Bot 里的挂件一致 */
   [data-salary-meter]{
     position:absolute;
-    left: calc(50% - 124px); top: 10px; right: auto; bottom: auto;
+    left: calc(50% - 218px); top: 10px; right: auto; bottom: auto;
     width: 248px; height: 88px;
     -webkit-app-region:drag;
     transition:height .18s ease;
@@ -108,8 +108,11 @@
   </div>
 
   <div class="sm-balance" id="balanceRow" role="button" tabindex="0" aria-label="查看今日账目" title="当日工资减去已统计的模型花费估算">
-    <small class="sm-food-label">余粮</small><small id="balancePrefix">≈ ¥</small>
-    <span id="balanceValue">0.00</span>
+    <small class="sm-food-label" id="balanceLabel">余粮</small>
+    <span class="sm-money">
+      <small id="balancePrefix">≈ ¥</small><span id="balanceValue">0.00</span>
+      <span class="sm-delta" id="balanceArrow" aria-hidden="true"></span>
+    </span>
     <span id="petStatus"></span><button class="sm-toggle" id="toggleBtn" aria-label="展开人物" aria-expanded="false">展开 ⌃</button>
   </div>
 

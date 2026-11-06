@@ -20,17 +20,41 @@
 }
 [data-salary-meter] .sm-bubble:after {content:'';position:absolute;left:-7px;bottom:7px;border-right:8px solid var(--sm-bg);border-top:7px solid transparent}
 [data-salary-meter] .sm-bubble[hidden] {display:none}
+/* 余粮：不要容器，数字直接浮在人物脚下，底下一条细线。
+   用户 23:14 定：涨钱数字往上滚、变绿、箭头朝上；扣钱往下滚、变红、箭头朝下。 */
 [data-salary-meter] .sm-balance {
-  position:absolute;top:340px;left:50%;transform:translateX(-50%);width:270px;height:44px;
-  display:flex;align-items:center;gap:5px;padding:0 13px;background:color-mix(in srgb,var(--sm-bg) 92%,transparent);
-  border:1px solid var(--sm-line);border-radius:24px;box-shadow:0 5px 20px #00000012;
+  position:absolute;top:330px;left:50%;transform:translateX(-50%);width:auto;min-width:214px;height:auto;
+  display:flex;align-items:flex-end;justify-content:center;gap:8px;
+  padding:0 0 11px;background:none;border:0;border-radius:0;box-shadow:none;
   font-size:21px;line-height:1;letter-spacing:0;cursor:pointer;-webkit-app-region:no-drag;
 }
-[data-salary-meter] .sm-balance:focus-visible{outline:2px solid var(--sm-blue);outline-offset:3px}
-[data-salary-meter] .sm-food-label{font-size:10px;margin-right:3px}
-[data-salary-meter] #balanceValue{font-size:20px}
-[data-salary-meter] #petStatus{font-size:10px;font-weight:400;margin-left:auto;color:var(--sm-muted);white-space:nowrap}
-[data-salary-meter] .sm-balance .sm-toggle{margin-left:3px;min-width:18px}
+[data-salary-meter] .sm-balance::after {
+  content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:214px;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(116,138,170,.55),transparent);
+}
+[data-salary-meter] .sm-balance:focus-visible{outline:2px solid var(--sm-blue);outline-offset:6px;border-radius:8px}
+[data-salary-meter] .sm-food-label{font-size:11px;margin:0 0 3px;color:var(--sm-muted);letter-spacing:.06em}
+[data-salary-meter] .sm-money {
+  display:inline-flex;align-items:baseline;gap:1px;
+  font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;
+  color:var(--sm-text);text-shadow:0 0 6px rgba(255,255,255,.55);
+  transition:color .2s ease;
+}
+[data-salary-meter] #balancePrefix{font-size:13px;font-weight:500;opacity:.8}
+[data-salary-meter] #balanceValue{display:inline-block;font-size:26px}
+[data-salary-meter] .sm-delta{font-size:10px;line-height:1;opacity:0;margin-left:2px;transition:opacity .22s ease}
+[data-salary-meter] .sm-balance.up .sm-money{color:#17a673}
+[data-salary-meter] .sm-balance.up .sm-delta{opacity:1;color:#17a673}
+[data-salary-meter] .sm-balance.up .sm-delta::before{content:'▲'}
+[data-salary-meter] .sm-balance.down .sm-money{color:#dc4545}
+[data-salary-meter] .sm-balance.down .sm-delta{opacity:1;color:#dc4545}
+[data-salary-meter] .sm-balance.down .sm-delta::before{content:'▼'}
+[data-salary-meter] #balanceValue.roll-up{animation:smRollUp .2s cubic-bezier(.2,.7,.3,1)}
+[data-salary-meter] #balanceValue.roll-down{animation:smRollDown .2s cubic-bezier(.2,.7,.3,1)}
+@keyframes smRollUp{from{transform:translateY(58%);opacity:.15}to{transform:translateY(0);opacity:1}}
+@keyframes smRollDown{from{transform:translateY(-58%);opacity:.15}to{transform:translateY(0);opacity:1}}
+[data-salary-meter] #petStatus{font-size:10px;font-weight:400;margin:0 0 3px;color:var(--sm-muted);white-space:nowrap}
+[data-salary-meter] .sm-balance .sm-toggle{margin-left:2px;min-width:16px;align-self:center}
 [data-salary-meter] .sm-top{position:absolute;top:397px;left:85px;width:270px;background:var(--sm-bg);border-radius:14px 14px 0 0;height:27px}
 [data-salary-meter] .sm-worktime{display:block;top:424px;bottom:auto;left:85px;right:auto;width:270px;height:30px;background:var(--sm-bg);padding:0 11px}
 [data-salary-meter] .sm-worktime progress{display:block}

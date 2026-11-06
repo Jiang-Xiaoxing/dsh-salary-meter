@@ -26,6 +26,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     widget: pick('widget'),
     statusTitle: pick('statusTitle'),
     clock: pick('clockText'),
+    balance: pick('balanceRow'),
     prefix: pick('balancePrefix'),
     value: pick('balanceValue'),
     toggle: pick('toggleBtn'),
@@ -184,6 +185,40 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     else setTimeout(() => { if (!useVideo()) ensureMascot(); }, 260);
   }
 
+  /* 余粮跳动：涨钱往上滚、扣钱往下滚；涨满 1 毛或一扣钱就亮色 + 箭头。
+     用户 23:14 定：加钱像水滴（每分钱微跳、每毛一次绿闪），扣钱像刀切（立刻红闪）。 */
+  let lastAmount = null;
+  let greenMark = null;
+  let flashTimer = 0;
+
+  function bigFlash(dir, hold) {
+    el.balance.classList.remove('up', 'down');
+    void el.balance.offsetWidth;
+    el.balance.classList.add(dir);
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => el.balance.classList.remove('up', 'down'), hold);
+  }
+
+  function tickMoney(amount) {
+    const prev = lastAmount;
+    lastAmount = amount;
+    if (prev === null) { greenMark = amount; return; }
+    const delta = amount - prev;
+    if (Math.abs(delta) < 0.0005) return;
+
+    el.value.classList.remove('roll-up', 'roll-down');
+    void el.value.offsetWidth;
+    el.value.classList.add(delta > 0 ? 'roll-up' : 'roll-down');
+
+    if (delta < 0) {
+      greenMark = amount;
+      bigFlash('down', 2400);
+    } else if (greenMark === null || amount - greenMark >= 0.1) {
+      greenMark = amount;
+      bigFlash('up', 1600);
+    }
+  }
+
   function paint() {
     const now = new Date();
     const wage = computeWage(now);
@@ -196,8 +231,11 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
     const text = (amount < 0 ? '−' : '') + money(Math.abs(amount));
     el.prefix.textContent = partial ? '≤ ¥' : '¥';
-    el.value.textContent = text;
-    el.value.style.setProperty('--sm-digits', text.length);
+    if (el.value.textContent !== text) {
+      el.value.textContent = text;
+      el.value.style.setProperty('--sm-digits', text.length);
+      tickMoney(amount);
+    }
 
     el.countdown.innerHTML = wage.countdownSeconds > 0
       ? wage.countdownLabel + ' <b>' + duration(wage.countdownSeconds) + '</b>'

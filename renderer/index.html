@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost blob:">
+<title>计价器</title>
+<link rel="stylesheet" href="assets/widget.css">
+<style>
+  *{box-sizing:border-box}
+
+  html,body{
+    margin:0;padding:0;
+    width:100%;height:100%;
+    background:transparent;
+    overflow:hidden;
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    user-select:none;
+    cursor:default;
+  }
+
+  /* 窗口 = 胶囊 + 四周 10px 透明边，给投影留位置；样式与 DS Bot 里的挂件一致 */
+  [data-salary-meter]{
+    position:absolute;
+    left:10px;top:10px;right:auto;bottom:auto;
+    width:248px;height:88px;
+    -webkit-app-region:drag;
+    transition:height .18s ease;
+  }
+  [data-salary-meter][data-expanded='true']{height:228px}
+  [data-salary-meter] .sm-mascot{left:calc(50% - 56px)}
+
+  /* 收起时和插件一样：只留顶部信息、余额和下班倒计时 */
+  [data-salary-meter][data-expanded='false'] .sm-ledger,
+  [data-salary-meter][data-expanded='false'] .sm-mascot,
+  [data-salary-meter][data-expanded='false'] .sm-bubble,
+  [data-salary-meter][data-expanded='false'] .sm-worktime progress{display:none}
+
+  .sm-icon,
+  .sm-toggle{
+    background:transparent;
+    border:0;
+    cursor:pointer;
+    padding:0;
+    font-family:inherit;
+    -webkit-app-region:no-drag;
+  }
+  .sm-icon{
+    width:22px;height:21px;
+    border-radius:6px;
+    color:var(--sm-muted);
+    font-size:13px;
+    line-height:21px;
+  }
+  .sm-icon:hover{background:rgba(140,140,150,.16);color:var(--sm-text)}
+
+  .sm-toggle{font:inherit;color:var(--sm-blue)}
+  [data-salary-meter] .sm-error{
+    position:absolute;left:0;right:0;bottom:0;
+    margin:0;padding:6px 8px;
+    background:var(--sm-bg);
+    color:#ef8888;
+    font-size:11px;
+  }
+
+  /* 设置浮层：铺满整个窗口，Windows 这边开第二个 webview 会卡住，所以走同一窗口 */
+  .sm-layer{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;
+    background:#EDE9DF;
+    border-radius:12px;
+    overflow:hidden;
+    z-index:50;
+  }
+  .sm-layer[hidden]{display:none}
+  .sm-layer-bar{
+    height:26px;
+    flex:none;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 6px 0 12px;
+    background:#F4F0E6;
+    border-bottom:1px solid #D2CBBA;
+    color:#6E6758;
+    font-size:11px;
+    letter-spacing:.08em;
+    -webkit-app-region:drag;
+  }
+  .sm-layer-bar button{
+    -webkit-app-region:no-drag;
+    width:24px;height:20px;
+    border:0;border-radius:5px;
+    background:transparent;
+    color:#6E6758;
+    font-size:15px;line-height:18px;
+    cursor:pointer;
+  }
+  .sm-layer-bar button:hover{background:rgba(33,30,25,.08);color:#211E19}
+  .sm-layer iframe{flex:1;width:100%;border:0;background:#EDE9DF}
+</style>
+</head>
+<body>
+
+<section data-salary-meter data-theme="dark" data-expanded="false" aria-label="打工养肥鱼" id="widget">
+  <div class="sm-top" id="topRow">
+    <span class="sm-title" id="statusTitle" title="上班中">碗里还剩</span>
+    <time class="sm-clock" id="clockText">00:00:00</time>
+    <button class="sm-icon" id="settingsBtn" title="设置" aria-label="设置">⋯</button>
+  </div>
+
+  <div class="sm-balance" id="balanceRow" title="当日工资减去已统计的模型花费估算">
+    <small id="balancePrefix">≈ ¥</small>
+    <span id="balanceValue">0.00</span>
+    <button class="sm-toggle" id="toggleBtn" aria-label="展开人物" aria-expanded="false">展开 ⌃</button>
+  </div>
+
+  <div class="sm-worktime" id="worktimeRow">
+    <div class="sm-worktime-row">
+      <span id="countdownText">距下班 <b>--:--:--</b></span>
+      <span class="sm-compact-expense" id="expenseCompact"></span>
+    </div>
+    <progress id="progressBar" value="0" max="1" aria-label="今日工作进度"></progress>
+  </div>
+
+  <div class="sm-ledger" id="ledgerRow">
+    <div>
+      <label>今日打工入账</label>
+      <b id="earnedText">¥0.00</b>
+    </div>
+    <div class="sm-expense">
+      <label id="expenseLabel">今日肥鱼偷吃（估算）</label>
+      <b id="spentText">− ¥0.00</b>
+    </div>
+  </div>
+
+  <button class="sm-mascot" id="mascotBtn" title="发现她偷吃" aria-label="发现鲸鱼娘偷吃">
+    <canvas id="mascotCanvas" width="224" height="224" aria-hidden="true"></canvas>
+    <img id="mascotImg" src="assets/actions.png" alt="" hidden>
+  </button>
+  <div class="sm-bubble" id="bubble">再吃一口就收工。</div>
+
+  <p class="sm-error" id="errorBox" role="alert" hidden></p>
+</section>
+
+<div class="sm-layer" id="settingsLayer" hidden>
+  <div class="sm-layer-bar">
+    <span id="settingsDragArea">设置</span>
+    <button id="settingsClose" title="关闭设置" aria-label="关闭设置">×</button>
+  </div>
+  <iframe id="settingsFrame" title="设置" src="about:blank"></iframe>
+</div>
+
+<script src="tauri-shim.js"></script>
+<script type="module" src="widget.js"></script>
+</body>
+</html>

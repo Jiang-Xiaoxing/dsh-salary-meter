@@ -42,13 +42,14 @@
 }
 [data-salary-meter] #balancePrefix{font-size:13px;font-weight:500;opacity:.8}
 [data-salary-meter] #balanceValue{display:inline-block;font-size:26px}
-[data-salary-meter] .sm-delta{font-size:10px;line-height:1;opacity:0;margin-left:2px;transition:opacity .22s ease}
+/* 箭头始终占同样宽度，只在 up/down 时显形；不然它一出现就会把居中的整行推歪 */
+[data-salary-meter] .sm-delta{display:inline-block;width:10px;text-align:center;font-size:10px;line-height:1;opacity:0;margin-left:2px;transition:opacity .22s ease}
+[data-salary-meter] .sm-delta::before{content:'▲'}
+[data-salary-meter] .sm-balance.down .sm-delta::before{content:'▼'}
 [data-salary-meter] .sm-balance.up .sm-money{color:#17a673}
 [data-salary-meter] .sm-balance.up .sm-delta{opacity:1;color:#17a673}
-[data-salary-meter] .sm-balance.up .sm-delta::before{content:'▲'}
 [data-salary-meter] .sm-balance.down .sm-money{color:#dc4545}
 [data-salary-meter] .sm-balance.down .sm-delta{opacity:1;color:#dc4545}
-[data-salary-meter] .sm-balance.down .sm-delta::before{content:'▼'}
 [data-salary-meter] #balanceValue.roll-up{animation:smRollUp .2s cubic-bezier(.2,.7,.3,1)}
 [data-salary-meter] #balanceValue.roll-down{animation:smRollDown .2s cubic-bezier(.2,.7,.3,1)}
 @keyframes smRollUp{from{transform:translateY(58%);opacity:.15}to{transform:translateY(0);opacity:1}}
@@ -64,4 +65,10 @@
 [data-salary-meter][data-expanded='false'] .sm-worktime{display:none}
 [data-salary-meter] .sm-compact-expense{display:none}
 [data-salary-meter] .sm-error{top:385px;bottom:auto;left:85px;right:85px;border-radius:8px;font-size:10px}
-@media(prefers-reduced-motion:reduce){.sm-video{transition:none}}
+@media(prefers-reduced-motion:reduce){
+  .sm-video{transition:none}
+  [data-salary-meter] #balanceValue.roll-up,
+  [data-salary-meter] #balanceValue.roll-down{animation:none}
+  [data-salary-meter] .sm-money,
+  [data-salary-meter] .sm-delta{transition:none}
+}

@@ -186,10 +186,21 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   }
 
   /* 余粮跳动：涨钱往上滚、扣钱往下滚；涨满 1 毛或一扣钱就亮色 + 箭头。
-     用户 23:14 定：加钱像水滴（每分钱微跳、每毛一次绿闪），扣钱像刀切（立刻红闪）。 */
+     用户 23:14 定：加钱像水滴（每分钱微跳、每毛一次绿闪），扣钱像刀切（立刻红闪）。
+     代码审查（Astra）补的三处：跨天/隔夜休眠要重置基准、首屏真实数据到位前不触发动画、动画最短间隔。 */
   let lastAmount = null;
   let greenMark = null;
   let flashTimer = 0;
+  let lastDay = '';
+  let basisReady = false;
+  let lastAnimAt = 0;
+
+  function clearMoneyFx() {
+    clearTimeout(flashTimer);
+    flashTimer = 0;
+    el.balance.classList.remove('up', 'down');
+    el.value.classList.remove('roll-up', 'roll-down');
+  }
 
   function bigFlash(dir, hold) {
     el.balance.classList.remove('up', 'down');
@@ -199,12 +210,26 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     flashTimer = setTimeout(() => el.balance.classList.remove('up', 'down'), hold);
   }
 
-  function tickMoney(amount) {
+  function tickMoney(amount, now) {
+    const day = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
+    if (day !== lastDay) {
+      // 跨天（含隔夜休眠醒来）：工资归零是规则不是扣钱，只重建基准
+      lastDay = day;
+      lastAmount = amount;
+      greenMark = amount;
+      clearMoneyFx();
+      return;
+    }
     const prev = lastAmount;
     lastAmount = amount;
-    if (prev === null) { greenMark = amount; return; }
+    if (prev === null || !basisReady) { greenMark = amount; return; }
     const delta = amount - prev;
     if (Math.abs(delta) < 0.0005) return;
+
+    // paint 是 100ms 一次；金额涨得快的配置下别把 200ms 的滚动反复打断
+    const stamp = performance.now();
+    if (stamp - lastAnimAt < 140) return;
+    lastAnimAt = stamp;
 
     el.value.classList.remove('roll-up', 'roll-down');
     void el.value.offsetWidth;
@@ -234,7 +259,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     if (el.value.textContent !== text) {
       el.value.textContent = text;
       el.value.style.setProperty('--sm-digits', text.length);
-      tickMoney(amount);
+      tickMoney(amount, now);
     }
 
     el.countdown.innerHTML = wage.countdownSeconds > 0
@@ -531,6 +556,12 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
       if (state) {
         cfg = Object.assign({}, DEF, state.config || cfg);
         today = state.today || { expense: 0, known: 0, unknown: 0 };
+        if (!basisReady) {
+          // 首屏 paint 用的是默认配置，等真实数据到了再重建基准，否则会被当成一次涨跌
+          basisReady = true;
+          lastAmount = null;
+          greenMark = null;
+        }
         if (today.expense > lastExpense + 1e-9) busyUntil = Date.now() + 5000;
         lastExpense = today.expense;
         applyTheme();

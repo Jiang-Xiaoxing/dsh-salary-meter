@@ -25,7 +25,7 @@
     color:var(--ink);
     font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
     font-size:13px;
-    padding:22px 24px 24px;
+    padding:16px 24px 14px;
     min-height:100vh;
   }
 
@@ -33,9 +33,9 @@
     display:flex;
     align-items:baseline;
     gap:12px;
-    padding-bottom:11px;
+    padding-bottom:9px;
     border-bottom:1px solid var(--rule);
-    margin-bottom:18px;
+    margin-bottom:14px;
   }
 
   .head h1{
@@ -54,7 +54,7 @@
     letter-spacing:.06em;
   }
 
-  .form{display:flex;flex-direction:column;gap:12px}
+  .form{display:flex;flex-direction:column;gap:9px}
 
   .field{display:flex;flex-direction:column;gap:5px}
   .field > label{font-size:11px;color:var(--ink-2);letter-spacing:.05em}
@@ -68,7 +68,7 @@
     background:#FCFAF3;
     border:1px solid var(--rule);
     border-radius:7px;
-    padding:8px 10px;
+    padding:7px 10px;
     box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
     transition:border-color .15s ease, box-shadow .15s ease;
   }
@@ -112,38 +112,38 @@
   .seg button:hover{background:rgba(33,30,25,.05)}
   .seg button.on{background:#211E19;color:#F4F0E6}
   .seg button.on:hover{background:#211E19}
+  .seg.two{grid-template-columns:1fr 1fr}
 
   /* 数据条 */
   .stats{
     display:grid;
-    grid-template-columns:1fr 1fr;
+    grid-template-columns:repeat(4, 1fr);
     border:1px solid var(--rule);
     border-radius:10px;
     background:rgba(255,255,255,.45);
     overflow:hidden;
-    margin-top:18px;
+    margin-top:12px;
   }
 
   .stat{
-    padding:10px 13px;
+    padding:7px 10px;
     display:flex;flex-direction:column;gap:2px;
     border-right:1px solid var(--rule);
-    border-bottom:1px solid var(--rule);
   }
-  .stat:nth-child(2n){border-right:none}
-  .stat:nth-child(n+3){border-bottom:none}
+  .stat:last-child{border-right:none}
 
   .stat b{
     font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
-    font-size:15px;font-weight:500;
+    font-size:13px;font-weight:500;
     font-variant-numeric:tabular-nums;
+    white-space:nowrap;
   }
   .stat span{font-size:11px;color:var(--ink-2)}
   .stat.hi b{color:#9A5B12}
 
   .foot{
-    margin-top:16px;
-    padding-top:14px;
+    margin-top:8px;
+    padding-top:8px;
     border-top:1px solid var(--rule);
     display:flex;
     flex-direction:column;
@@ -183,14 +183,15 @@
 </div>
 
 <div class="form">
-  <div class="field">
-    <label for="salary">月薪（税后）</label>
-    <input id="salary" type="number" min="0" step="100" inputmode="decimal">
-  </div>
-
-  <div class="field">
-    <label for="days">每月工作日</label>
-    <input id="days" type="number" min="1" max="31" step="0.5" inputmode="decimal">
+  <div class="row2">
+    <div class="field">
+      <label for="salary">月薪（税后）</label>
+      <input id="salary" type="number" min="0" step="100" inputmode="decimal">
+    </div>
+    <div class="field">
+      <label for="days">每月工作日</label>
+      <input id="days" type="number" min="1" max="31" step="0.5" inputmode="decimal">
+    </div>
   </div>
 
   <div class="row2">
@@ -224,6 +225,14 @@
   </div>
 
   <div class="field">
+    <label>人物</label>
+    <div class="seg two" id="segCharacter">
+      <button type="button" data-character="webm">WebM 动画</button>
+      <button type="button" data-character="atlas">旧版图集</button>
+    </div>
+  </div>
+
+  <div class="field">
     <label>自检</label>
     <p class="checkline" id="checkLine">正在读取…</p>
     <div class="diagRow">
@@ -248,8 +257,7 @@
     <span>开机自动启动</span>
   </label>
   <p class="hint">
-    点挂件右上角的 ⋯ 打开这里，右上角 × 关闭。饭钱按已识别模型的 token 用量估算，
-    单价核对日期 2026-11-03。退出程序用托盘菜单里的「退出计价器」。
+    ⋯ 打开设置，× 关闭；退出用托盘菜单。饭钱按已识别 token 估算，单价核对 2026-11-03。
   </p>
 </div>
 
@@ -295,12 +303,21 @@
 
   var cfg = Object.assign({}, DEF);
   var currentTheme = 'dark';
+  var currentCharacter = 'webm';
 
   function setTheme(t) {
     currentTheme = (t === 'light' || t === 'gold') ? t : 'dark';
     var btns = document.querySelectorAll('#seg button');
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('on', btns[i].getAttribute('data-theme') === currentTheme);
+    }
+  }
+
+  function setCharacter(value) {
+    currentCharacter = value === 'atlas' ? 'atlas' : 'webm';
+    var btns = document.querySelectorAll('#segCharacter button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', btns[i].getAttribute('data-character') === currentCharacter);
     }
   }
 
@@ -330,7 +347,8 @@
       end: el.end.value || '18:00',
       lunch: Math.max(0, num(el.lunch.value, 0)),
       weekend: el.weekend.checked,
-      theme: currentTheme
+      theme: currentTheme,
+      character: currentCharacter
     };
   }
 
@@ -385,6 +403,7 @@
     el.lunch.value = c.lunch;
     el.weekend.checked = !!c.weekend;
     setTheme(c.theme);
+    setCharacter(c.character);
   }
 
   var timer = null;
@@ -404,6 +423,14 @@
   for (var i = 0; i < segBtns.length; i++) {
     segBtns[i].addEventListener('click', function () {
       setTheme(this.getAttribute('data-theme'));
+      push();
+    });
+  }
+
+  var characterBtns = document.querySelectorAll('#segCharacter button');
+  for (var j = 0; j < characterBtns.length; j++) {
+    characterBtns[j].addEventListener('click', function () {
+      setCharacter(this.getAttribute('data-character'));
       push();
     });
   }

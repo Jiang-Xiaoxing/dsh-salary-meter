@@ -2,10 +2,12 @@
  * 桌面版挂件：外观与 DS Bot 里的 dsh-salary-meter 挂件保持一致，
  * 区别只是账本由 Rust 侧直接扫 DS Bot 的会话日志算出来，不依赖插件。
  */
+import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
+
 (function () {
   'use strict';
 
-  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark', expanded: false };
+  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark', character: 'webm', expanded: false };
 
   const PALETTES = {
     dark: { '--sm-bg': '#232324', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
@@ -37,6 +39,8 @@
     canvas: pick('mascotCanvas'),
     fallbackImg: pick('mascotImg'),
     mascotBtn: pick('mascotBtn'),
+    petStage: pick('petStage'),
+    videos: [pick('petVideoA'), pick('petVideoB')],
     settingsBtn: pick('settingsBtn'),
     errorBox: pick('errorBox'),
     settingsLayer: pick('settingsLayer'),
@@ -78,6 +82,13 @@
   let caughtUntil = 0;
   let busyUntil = 0;
   let lastExpense = 0;
+  let sceneCurrent = null;
+  let activeVideo = 0;
+  let sceneAttempt = 0;
+  let videoTimer = null;
+  let videoGuard = null;
+  let videoBroken = false;
+  let characterApplied = null;
 
   /* ------------------------------------------------------------ 小工具 */
 
@@ -119,28 +130,33 @@
     const perSecond = workSeconds > 0 ? num(cfg.salary, 0) / Math.max(1, num(cfg.days, 22)) / workSeconds : 0;
 
     let status = '上 班 中';
+    let phase = 'working';
     let countdownLabel = '距下班';
     let countdownSeconds = Math.max(0, end - clock);
     if (rest) {
       status = '休 息 日';
+      phase = 'rest';
       countdownLabel = '今天休息';
       countdownSeconds = 0;
     } else if (clock < start) {
       status = '未 开 工';
+      phase = 'before';
       countdownLabel = '距开工';
       countdownSeconds = start - clock;
     } else if (clock >= end) {
       status = '已 收 工';
+      phase = 'off';
       countdownLabel = '今日已收工';
       countdownSeconds = 0;
     } else if (lunch > 0 && clock >= lunchStart && clock < lunchStart + lunch) {
       status = '午 休 中';
+      phase = 'lunch';
     }
 
     return {
       earned: billable * perSecond,
       progress: workSeconds > 0 ? billable / workSeconds : 0,
-      status, countdownLabel, countdownSeconds, rest,
+      status, phase, countdownLabel, countdownSeconds, rest,
       before: clock < start, after: clock >= end,
     };
   }
@@ -160,9 +176,14 @@
     el.toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     el.toggle.setAttribute('aria-label', expanded ? '收起人物' : '展开人物');
     if (expanded) {
-      // 窗口要等 Rust 那边改完高度再建画布，否则 WebView 一变形 WebGL 上下文就可能丢
-      setTimeout(() => { if (expanded) ensureMascot(); }, 260);
+      if (useVideo()) {
+        playScene(currentScene());
+      } else {
+        // 窗口要等 Rust 那边改完高度再建画布，否则 WebView 一变形 WebGL 上下文就可能丢
+        setTimeout(() => { if (expanded && !useVideo()) ensureMascot(); }, 260);
+      }
     } else {
+      stopVideos();
       disposeMascot();
     }
   }
@@ -194,8 +215,14 @@
     el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
     if (expanded) {
-      const pose = performance.now() < caughtUntil ? 'caught' : null;
-      el.bubble.textContent = pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
+      if (useVideo()) {
+        const scene = pickScene({ phase: wage.phase, busy: Date.now() < busyUntil, caught: performance.now() < caughtUntil });
+        playScene(scene);
+        el.bubble.textContent = sceneBubble(scene);
+      } else {
+        const pose = performance.now() < caughtUntil ? 'caught' : null;
+        el.bubble.textContent = pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
+      }
     }
 
     if (mascot) mascot.setBusy(Date.now() < busyUntil);
@@ -267,6 +294,112 @@
     el.fallbackImg.hidden = true;
   }
 
+  /* -------------------------------------------------------- 人物动画（WebM） */
+
+  function useVideo() {
+    return !videoBroken && cfg.character !== 'atlas';
+  }
+
+  function currentScene() {
+    return pickScene({
+      phase: computeWage(new Date()).phase,
+      busy: Date.now() < busyUntil,
+      caught: performance.now() < caughtUntil,
+    });
+  }
+
+  function syncCharacterVisibility() {
+    const video = useVideo();
+    el.mascotBtn.classList.toggle('sm-video-mode', video);
+    el.petStage.hidden = !video;
+    el.canvas.hidden = video;
+    el.fallbackImg.hidden = true;
+    return video;
+  }
+
+  // 展开时按当前人物类型启动：视频立刻播，图集要等窗口变完形再建画布
+  function startCharacter() {
+    if (!expanded) return;
+    if (syncCharacterVisibility()) {
+      disposeMascot();
+      sceneCurrent = null;
+      playScene(currentScene());
+    } else {
+      stopVideos();
+      setTimeout(() => { if (expanded && !useVideo()) ensureMascot(); }, 260);
+    }
+  }
+
+  function applyCharacter() {
+    syncCharacterVisibility();
+    if (expanded) startCharacter();
+    else stopVideos();
+  }
+
+  function stopVideos() {
+    clearTimeout(videoTimer);
+    clearTimeout(videoGuard);
+    sceneCurrent = null;
+    sceneAttempt += 1;
+    for (const video of el.videos) {
+      video.pause();
+      video.dataset.on = 'false';
+    }
+  }
+
+  // 两块 video 轮流装场景，切换时交叉淡入
+  function playScene(scene) {
+    if (!scene || !expanded || !useVideo()) return;
+    if (scene === sceneCurrent) return;
+    sceneCurrent = scene;
+    const videos = el.videos;
+    const previous = videos[activeVideo];
+    const nextIndex = activeVideo === 0 ? 1 : 0;
+    const next = videos[nextIndex];
+    const myAttempt = ++sceneAttempt;
+    const src = `assets/webm/${SCENE_FILES[scene]}`;
+    const show = () => {
+      next.dataset.on = 'true';
+      if (previous) previous.dataset.on = 'false';
+      activeVideo = nextIndex;
+    };
+    const play = () => {
+      if (sceneAttempt !== myAttempt) return;
+      clearTimeout(videoGuard);
+      // 系统开了「减少动态效果」就停在第一帧
+      const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      next.currentTime = 0;
+      if (still) { show(); next.pause(); return; }
+      const attempt = next.play();
+      if (!attempt || !attempt.then) { show(); return; }
+      attempt.then(() => {
+        if (sceneAttempt !== myAttempt) return;
+        show();
+        clearTimeout(videoTimer);
+        videoTimer = setTimeout(() => {
+          if (previous && previous !== next && previous.dataset.on !== 'true') previous.pause();
+        }, 500);
+      }).catch(() => videoFailed());
+    };
+    // 迟迟播不起来也要有结果，不能留一块空白
+    videoGuard = setTimeout(() => {
+      if (sceneAttempt === myAttempt && next.dataset.on !== 'true') videoFailed();
+    }, 4000);
+    if (next.getAttribute('src') !== src) {
+      next.setAttribute('src', src);
+      next.addEventListener('canplay', play, { once: true });
+      next.load();
+    } else {
+      play();
+    }
+  }
+
+  function videoFailed() {
+    videoBroken = true;
+    stopVideos();
+    applyCharacter();
+  }
+
   /* -------------------------------------------------------------- 事件 */
 
   el.toggle.addEventListener('click', async () => {
@@ -322,6 +455,7 @@
       if (!next) return;
       cfg = Object.assign({}, DEF, next);
       applyTheme();
+      if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }
       applyExpanded();
       paint();
     });
@@ -344,6 +478,7 @@
         if (today.expense > lastExpense + 1e-9) busyUntil = Date.now() + 5000;
         lastExpense = today.expense;
         applyTheme();
+        if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }
         if (Date.now() > toggleGuardUntil && !!cfg.expanded !== expanded) {
           expanded = !!cfg.expanded;
           applyExpanded();

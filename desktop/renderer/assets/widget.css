@@ -34,6 +34,12 @@
 .sm-mascot { position: absolute; top: 54px; left: calc(50% - 56px); width: 112px; height: 112px; overflow: hidden; background: transparent; padding: 0; border: 0; cursor: pointer; }
 .sm-mascot canvas { display: block; width: 112px; height: 112px; pointer-events: none; }
 .sm-mascot img { position: absolute; top: 0; left: 0; width: 300%; height: 300%; max-width: none; pointer-events: none; }
+/* WebM 是 16:9 的，比原来的方形画布宽一点，人物才不会被压小 */
+.sm-mascot.sm-video-mode { top: 50px; left: calc(50% - 84px); width: 168px; height: 108px; }
+.sm-stage { position: absolute; inset: 0; }
+.sm-stage[hidden] { display: none; }
+.sm-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; opacity: 0; transition: opacity .35s ease; pointer-events: none; background: transparent; }
+.sm-video[data-on='true'] { opacity: 1; }
 .sm-mascot:focus-visible { outline: 2px solid var(--sm-blue); outline-offset: -2px; border-radius: 12px; }
 .sm-bubble { position: absolute; top: 90px; right: 9px; padding: 4px 6px; font-size: 8px; border-radius: 8px 8px 0 8px; background: var(--dsw-specific-bubble, #34436c); color: var(--sm-text); }
 .sm-worktime { position: absolute; left: 11px; right: 11px; bottom: 8px; height: 20px; }

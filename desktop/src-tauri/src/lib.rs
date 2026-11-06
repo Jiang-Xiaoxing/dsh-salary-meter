@@ -30,6 +30,7 @@ struct Config {
     lunch: f64,
     weekend: bool,
     theme: String,
+    character: String,
     expanded: bool,
 }
 
@@ -43,6 +44,7 @@ impl Default for Config {
             lunch: 1.0,
             weekend: false,
             theme: "dark".to_string(),
+            character: "webm".to_string(),
             expanded: false,
         }
     }
@@ -265,6 +267,12 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
             _ => "dark".to_string(),
         };
     }
+    if let Some(v) = patch.get("character").and_then(|v| v.as_str()) {
+        cfg.character = match v {
+            "atlas" => "atlas".to_string(),
+            _ => "webm".to_string(),
+        };
+    }
 
     save_config(&app, &cfg);
     let _ = app.emit("config-changed", &cfg);
@@ -329,7 +337,16 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
         return false;
     };
     if mode == "settings" {
-        let _ = window.set_size(tauri::LogicalSize::new(466.0, 820.0));
+        // 设置页比屏幕还高就按屏幕压一下，标题栏和关闭按钮得一直看得见
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let monitor_height = window
+            .current_monitor()
+            .ok()
+            .flatten()
+            .map(|monitor| monitor.size().height as f64 / scale)
+            .unwrap_or(820.0);
+        let height = 820.0_f64.min(monitor_height - 40.0).max(520.0);
+        let _ = window.set_size(tauri::LogicalSize::new(466.0, height));
     } else {
         let expanded = load_config(&app).expanded;
         let height = if expanded {

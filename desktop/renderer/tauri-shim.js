@@ -43,12 +43,6 @@
     },
     openMenu: function () {
       invoke('open_menu');
-    },
-    getLogin: function () {
-      return invoke('get_login');
-    },
-    setLogin: function (v) {
-      invoke('set_login', { enabled: !!v });
     }
   };
 

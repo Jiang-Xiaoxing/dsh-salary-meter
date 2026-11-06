@@ -257,10 +257,6 @@
 </div>
 
 <div class="foot">
-  <label class="check">
-    <input id="login" type="checkbox">
-    <span>开机自动启动</span>
-  </label>
   <p class="hint">
     ⋯ 打开设置，× 关闭；退出用托盘菜单。饭钱按已识别 token 估算，单价核对 2026-11-03。
   </p>
@@ -282,8 +278,6 @@
       return Promise.resolve(Object.assign({}, DEF, s));
     },
     setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} },
-    getLogin: function () { return Promise.resolve(false); },
-    setLogin: function () {},
     getState: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
     recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); }
   };
@@ -295,7 +289,6 @@
     end: document.getElementById('end'),
     lunch: document.getElementById('lunch'),
     weekend: document.getElementById('weekend'),
-    login: document.getElementById('login'),
     diag: document.getElementById('diag'),
     perSec: document.getElementById('perSec'),
     perHour: document.getElementById('perHour'),
@@ -452,8 +445,6 @@
     });
   }
 
-  el.login.addEventListener('change', function () { api.setLogin(el.login.checked); });
-
   /* ---------------- 自检 ---------------- */
   function showCheck(report) {
     var today = report.today || {};
@@ -487,8 +478,6 @@
     fill(cfg);
     summarize(cfg);
   });
-
-  api.getLogin().then(function (v) { el.login.checked = !!v; });
 })();
 </script>
 </body>

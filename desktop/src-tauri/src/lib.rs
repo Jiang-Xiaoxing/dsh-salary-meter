@@ -11,7 +11,6 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, PhysicalPosition, WindowEvent,
 };
-use tauri_plugin_autostart::ManagerExt;
 
 /* 胶囊外观：和 DS Bot 里的插件挂件同尺寸，四周留 10px 透明边给投影 */
 const WIN_W: f64 = 460.0;
@@ -69,7 +68,6 @@ struct TrayHandles {
     theme: MenuItem<tauri::Wry>,
     top: CheckMenuItem<tauri::Wry>,
     pass: CheckMenuItem<tauri::Wry>,
-    login: CheckMenuItem<tauri::Wry>,
 }
 
 fn data_dir(app: &AppHandle) -> PathBuf {
@@ -372,22 +370,6 @@ fn open_menu(app: AppHandle) {
     open_settings(app);
 }
 
-#[tauri::command]
-fn get_login(app: AppHandle) -> bool {
-    app.autolaunch().is_enabled().unwrap_or(false)
-}
-
-#[tauri::command]
-fn set_login(app: AppHandle, enabled: bool) -> bool {
-    let al = app.autolaunch();
-    let _ = if enabled { al.enable() } else { al.disable() };
-    let now = al.is_enabled().unwrap_or(false);
-    if let Some(h) = app.try_state::<TrayHandles>() {
-        let _ = h.login.set_checked(now);
-    }
-    now
-}
-
 /* -------------------------------------------------------------- 菜单同步 */
 
 fn theme_label(theme: &str) -> &'static str {
@@ -423,7 +405,6 @@ fn sync_menu(app: &AppHandle, cfg: &Config) {
         .map(|s| s.passthrough.load(Ordering::Relaxed))
         .unwrap_or(false);
     let _ = handles.pass.set_checked(pass);
-    let _ = handles.login.set_checked(app.autolaunch().is_enabled().unwrap_or(false));
 }
 
 fn apply_passthrough(app: &AppHandle, on: bool) {
@@ -443,10 +424,6 @@ fn apply_passthrough(app: &AppHandle, on: bool) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
         .manage(AppState {
             passthrough: AtomicBool::new(false),
             cache: Mutex::new(ledger::ScanCache::default()),
@@ -462,9 +439,7 @@ pub fn run() {
             set_expanded,
             set_mode,
             open_settings,
-            open_menu,
-            get_login,
-            set_login
+            open_menu
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());
@@ -477,8 +452,6 @@ pub fn run() {
             let top_item = CheckMenuItem::with_id(app, "top", "始终置顶", true, true, None::<&str>)?;
             let pass_item =
                 CheckMenuItem::with_id(app, "pass", "鼠标穿透（不挡点击）", true, false, None::<&str>)?;
-            let login_item =
-                CheckMenuItem::with_id(app, "login", "开机自启", true, false, None::<&str>)?;
             let sep2 = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出计价器", true, None::<&str>)?;
 
@@ -490,7 +463,6 @@ pub fn run() {
                     &theme_item,
                     &top_item,
                     &pass_item,
-                    &login_item,
                     &sep2,
                     &quit_item,
                 ],
@@ -532,10 +504,6 @@ pub fn run() {
                                 .unwrap_or(false);
                             apply_passthrough(app, !cur);
                         }
-                        "login" => {
-                            let now = app.autolaunch().is_enabled().unwrap_or(false);
-                            let _ = set_login(app.clone(), !now);
-                        }
                         _ => {}
                     }
                 })
@@ -559,7 +527,6 @@ pub fn run() {
                 theme: theme_item,
                 top: top_item,
                 pass: pass_item,
-                login: login_item,
             });
 
             /* ---- 主窗口定位 ---- */

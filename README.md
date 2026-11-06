@@ -2,7 +2,7 @@
 
 **DSH（DeepSeek Harness）社区插件**，用一条小工资条显示实时工资、当前时间、下班倒计时和模型饭钱估算，展开后可以看到抱着白米饭吃个不停的蓝毛鲸鱼娘。
 
-> 想让它浮在桌面任意位置（不在 DSH 窗口里）？用桌面独立版：[salary-meter-desktop](https://github.com/Jiang-Xiaoxing/salary-meter-desktop)。
+> 想让它浮在桌面任意位置（不在 DSH 窗口里）？用同一仓库里的桌面版：[desktop](desktop/README.md)。
 
 ![鲸鱼娘的九个关键姿态](assets/whale-girl-actions.png)
 

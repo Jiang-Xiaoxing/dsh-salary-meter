@@ -1,4 +1,7 @@
-﻿import { readFile, readdir, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { zstdDecompressSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
@@ -9,6 +12,36 @@ import { DEFAULT_CONFIG, validateConfig, chinaDay, recordExpense, setPrices, def
 export const name = 'salary-meter';
 export const inject = ['connection', 'sessions'];
 const packageRoot = dirname(fileURLToPath(import.meta.url));
+const execFileAsync = promisify(execFile);
+
+// 列出正在运行的工资挂件进程。只认可执行文件全路径，避免同名进程误伤。
+async function listWidgetProcesses(exePath) {
+  if (process.platform !== 'win32' || !exePath) return [];
+  const script = "Get-CimInstance Win32_Process -Filter \"Name='SalaryMeter.exe'\" | Select-Object ProcessId,ExecutablePath,@{n='StartedAt';e={ if ($_.CreationDate) { $_.CreationDate.ToString('o') } else { '' } }} | ConvertTo-Json -Compress";
+  try {
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 8000, windowsHide: true });
+    const text = String(stdout).trim();
+    if (!text) return [];
+    const parsed = JSON.parse(text);
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    return items
+      .filter(item => item && typeof item.ExecutablePath === 'string' && item.ExecutablePath.toLowerCase() === exePath.toLowerCase())
+      .map(item => ({ pid: item.ProcessId, startedAt: item.StartedAt || null }));
+  } catch {
+    return [];
+  }
+}
+
+function resolveWidgetExe() {
+  const candidates = [
+    process.env.SALARY_METER_EXE,
+    join(packageRoot, 'SalaryMeter.exe'),
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'SalaryMeter', 'SalaryMeter.exe') : null,
+    'E:\\SalaryMeter\\SalaryMeter.exe',
+    'C:\\Program Files\\SalaryMeter\\SalaryMeter.exe',
+  ].filter(Boolean);
+  return candidates.find(candidate => existsSync(candidate)) ?? null;
+}
 
 async function readJson(file, fallback) {
   try { return JSON.parse(await readFile(file, 'utf8')); }
@@ -30,6 +63,39 @@ async function atomicJson(file, value) {
 }
 
 export async function apply(ctx) {
+  // 桌面挂件：插件启用时拉起，插件停用时收走——「已安装插件」列表里的开关直接控制它。
+  const widgetExe = resolveWidgetExe();
+  let managedWidget = null;
+  let widgetChild = null;
+  async function ensureWidget() {
+    if (!widgetExe) return;
+    // 已有实例（用户手动开的、或开机自启的）就复用，绝不重复开第二个。
+    if ((await listWidgetProcesses(widgetExe)).length > 0) return;
+    try {
+      const child = spawn(widgetExe, [], { stdio: 'ignore', windowsHide: false, cwd: dirname(widgetExe) });
+      widgetChild = child;
+      child.on('exit', () => { if (widgetChild === child) widgetChild = null; });
+      child.unref();
+      const pid = child.pid;
+      await new Promise(resolve => setTimeout(resolve, 900));
+      const found = (await listWidgetProcesses(widgetExe)).find(item => item.pid === pid);
+      managedWidget = { pid, startedAt: found?.startedAt ?? null };
+    } catch {
+      managedWidget = null;
+    }
+  }
+  async function releaseWidget() {
+    const record = managedWidget;
+    managedWidget = null;
+    if (!record || !widgetExe) return;
+    // 杀之前核对：可执行文件全路径要一致，PID 和启动时间也要对得上；对不上宁可不杀。
+    const running = await listWidgetProcesses(widgetExe);
+    const match = running.find(item => item.pid === record.pid && (record.startedAt === null || item.startedAt === record.startedAt));
+    if (!match) return;
+    try { process.kill(match.pid); } catch {}
+  }
+  ctx.effect(() => () => { releaseWidget().catch(() => {}); }, 'salary-meter: desktop widget');
+  ensureWidget().catch(() => {});
   const root = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'data', 'dsh-salary-meter');
   const configFile = join(root, 'config.json');
   const ledgerFile = join(root, 'ledger.json');

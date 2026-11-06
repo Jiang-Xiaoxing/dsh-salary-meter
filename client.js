@@ -243,16 +243,8 @@ window.__ModuleLoader__.load({
     return {
       name: 'salary-meter', inject: ['slots'],
       apply(ctx) {
-        ctx.effect(() => {
-          const stylesheet = document.createElement('link');
-          stylesheet.rel = 'stylesheet';
-          stylesheet.href = '/api/salary-meter/widget.css';
-          document.head.append(stylesheet);
-          return () => stylesheet.remove();
-        }, 'salary-meter: styles');
-        ctx.slots.inject('shell.overlay', function* () {
-          yield ctx.slots.register({ name: 'shell.overlay', id: 'salary-meter', order: 900 }, SalaryWidget);
-        });
+        // 挂件由桌面独立窗口显示（本插件只负责拉起/关闭它），不再往 DSH 窗口里画，
+        // 免得同一份工资出现两个挂件。
       },
     };
   },

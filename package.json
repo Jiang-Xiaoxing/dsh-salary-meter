@@ -4,7 +4,7 @@
   "description": "打工养肥鱼，实时工资、下班倒计时和模型饭钱估算",
   "type": "module",
   "main": "./index.mjs",
-  "icon": "./icon.svg",
+  "icon": "./icon.png",
   "exports": {
     ".": "./index.mjs",
     "./client": "./client.js",
@@ -12,7 +12,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["index.mjs", "core.mjs", "client.js", "assets/mascot.mjs", "assets/whale-girl-actions.png", "assets/widget.css", "assets/settings.html", "docs/images", "docs/animation-validation.md", "icon.svg", "locale", "cordis.patch.yml", "README.md"],
+  "files": ["index.mjs", "core.mjs", "client.js", "assets/mascot.mjs", "assets/whale-girl-actions.png", "assets/widget.css", "assets/settings.html", "docs/images", "docs/animation-validation.md", "icon.png", "locale", "cordis.patch.yml", "README.md"],
   "scripts": { "test": "node --test core.test.mjs" },
   "engines": { "node": ">=22" },
   "repository": { "type": "git", "url": "git+https://github.com/Jiang-Xiaoxing/dsh-salary-meter.git" },

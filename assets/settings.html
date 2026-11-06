@@ -15,6 +15,9 @@ input { width: 100%; height: 34px; border: .5px solid var(--dsw-alias-border-l2,
 .themeRow { display: flex; gap: 8px; }
 .themeRow button { flex: 1; background: var(--dsw-alias-bg-layer-2, #2c2c2e); color: inherit; border: .5px solid var(--dsw-alias-border-l2, #ffffff25); border-radius: 12px; padding: 8px 12px; font: inherit; cursor: pointer; }
 .themeRow button.on { border-color: var(--dsw-alias-state-business-primary, #8398ff); color: var(--dsw-alias-state-business-primary, #8398ff); }
+.check-line { margin: 6px 0 8px; color: var(--dsw-alias-label-secondary, #a3a7b3); }
+#recompute { background: var(--dsw-alias-bg-layer-2, #2c2c2e); color: inherit; border: .5px solid var(--dsw-alias-border-l2, #ffffff25); border-radius: 12px; padding: 8px 12px; font: inherit; cursor: pointer; }
+#recompute:disabled { opacity: .5; cursor: default; }
 button[type=submit] { background: var(--dsw-alias-button-primary-fill, #f9fafb); color: var(--dsw-alias-bg-base, #151517); border: 0; border-radius: 12px; padding: 8px 16px; font: inherit; cursor: pointer; margin-top: 6px; }
 button[type=submit]:disabled { opacity: .5; cursor: default; }
 #feedback { min-height: 23px; color: var(--dsw-alias-state-warn-primary, #f0bf69); margin: 10px 0; }
@@ -30,6 +33,9 @@ button[type=submit]:disabled { opacity: .5; cursor: default; }
   <label class="check"><input id="weekend" type="checkbox">周末也算上班</label>
   <h2>外观</h2>
   <div class="themeRow" id="themeRow"><button type="button" data-theme="dark">深色</button><button type="button" data-theme="light">浅白</button><button type="button" data-theme="gold">暗金</button></div>
+  <h2>自检</h2>
+  <p class="check-line" id="checkLine">正在读取…</p>
+  <button type="button" id="recompute">重算今天的账</button>
   <p id="feedback" role="status"></p><button id="save" type="submit" disabled>保存参数</button>
 </form>
 <p class="hint">午休从中午 12 点起计算，并限制在你的班次内。模型饭钱按已识别模型的 token 用量估算，单价核对日期为 2026-11-03。外观点了立即生效。</p>
@@ -49,6 +55,25 @@ for (const button of document.querySelectorAll('#themeRow button')) button.addEv
   setTheme(button.dataset.theme);
   parent.postMessage({ type: 'salary-meter:theme', theme: currentTheme }, location.origin);
 });
+const checkLine = document.getElementById('checkLine');
+const recompute = document.getElementById('recompute');
+function showCheck(state) {
+  const today = state.today || {};
+  const prices = state.prices || {};
+  checkLine.textContent = `今日已算 ${today.known ?? 0} 笔、未算 ${today.unknown ?? 0} 笔，合计 ¥${Number(today.expense ?? 0).toFixed(2)}；价格表：${prices.source || '内置'}${prices.count ? '，' + prices.count + ' 个模型' : ''}`;
+}
+recompute.addEventListener('click', async () => {
+  recompute.disabled = true;
+  checkLine.textContent = '正在重算…';
+  try {
+    const response = await fetch('/api/salary-meter/recompute', { method: 'POST' });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || '重算失败');
+    showCheck({ today: value.today, prices: value.prices });
+    checkLine.textContent += `（扫了 ${value.sessions} 个会话，其中已关闭 ${value.archived ?? 0} 个）`;
+  } catch (error) { checkLine.textContent = error.message; }
+  finally { recompute.disabled = false; }
+});
 async function load() {
   const response = await fetch('/api/salary-meter/state');
   if (!response.ok) throw new Error('参数读取失败，请重新打开设置');
@@ -60,6 +85,7 @@ async function load() {
     else input.value = state.config[key];
   }
   setTheme(state.view && state.view.theme);
+  showCheck(state);
   save.disabled = false;
 }
 document.getElementById('form').addEventListener('submit', async event => {

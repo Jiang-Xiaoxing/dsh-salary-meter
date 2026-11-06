@@ -1,9 +1,10 @@
-import { readFile, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
+import { zstdDecompressSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_CONFIG, validateConfig, chinaDay, recordExpense, setPrices } from './core.mjs';
+import { DEFAULT_CONFIG, validateConfig, chinaDay, recordExpense, setPrices, defaultPrices, usageFromEvent, estimateExpense } from './core.mjs';
 
 export const name = 'salary-meter';
 export const inject = ['connection', 'sessions'];
@@ -46,10 +47,14 @@ export async function apply(ctx) {
   let view = { expanded: savedView?.expanded === true, theme: ['light', 'gold'].includes(savedView?.theme) ? savedView.theme : 'dark', revision: savedView?.revision ?? 0 };
   const ledger = await readJson(ledgerFile, { days: {}, positions: {}, lastExpenseAt: 0 });
   const priceCacheFile = join(root, 'prices-cache.json');
+  let priceState = { source: '内置', fetchedAt: null, count: Object.keys(defaultPrices()).length };
   async function refreshPrices() {
     try {
       const cached = await readJson(priceCacheFile, null);
-      if (cached?.prices) setPrices(cached.prices);
+      if (cached?.prices) {
+        setPrices(cached.prices);
+        priceState = { source: '缓存', fetchedAt: cached.fetchedAt ?? null, count: Object.keys(cached.prices).length };
+      }
     } catch { /* 缓存损坏就用内置价 */ }
     const sources = [
       'https://cdn.jsdelivr.net/gh/Jiang-Xiaoxing/dsh-salary-meter@main/prices.json',
@@ -62,6 +67,7 @@ export async function apply(ctx) {
         const body = await response.json();
         if (body?.prices && typeof body.prices === 'object') {
           setPrices(body.prices);
+          priceState = { source: '远程', fetchedAt: Date.now(), count: Object.keys(body.prices).length };
           await atomicJson(priceCacheFile, { fetchedAt: Date.now(), prices: body.prices }).catch(() => {});
           return;
         }
@@ -71,7 +77,7 @@ export async function apply(ctx) {
   refreshPrices().catch(() => {});
   const priceTimer = setInterval(() => { refreshPrices().catch(() => {}); }, 24 * 3600_000);
   ctx.effect(() => () => clearInterval(priceTimer), 'salary-meter: refresh prices');
-  const sessions = new WeakMap();
+  let sessions = new WeakMap();
   const active = new Set();
   let writes = Promise.resolve();
   let writeError = null;
@@ -108,6 +114,77 @@ export async function apply(ctx) {
     if (changed) persistLedger();
   }
   ctx.on('session/event', session => scan(session));
+  // 会话日志是多个 zstd 帧首尾相接；按魔数切开逐帧解压，拼回 JSONL。
+  function decodeSessionLog(bytes) {
+    const magic = [0x28, 0xb5, 0x2f, 0xfd];
+    const frames = [];
+    let start = -1;
+    for (let i = 0; i <= bytes.length - 4; i++) {
+      if (bytes[i] === magic[0] && bytes[i + 1] === magic[1] && bytes[i + 2] === magic[2] && bytes[i + 3] === magic[3]) {
+        if (start >= 0) frames.push(bytes.subarray(start, i));
+        start = i;
+      }
+    }
+    if (start >= 0) frames.push(bytes.subarray(start));
+    const chunks = [];
+    for (const frame of frames) {
+      try { chunks.push(zstdDecompressSync(frame)); } catch { /* 坏帧跳过 */ }
+    }
+    const events = [];
+    for (const line of Buffer.concat(chunks).toString('utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try { events.push(JSON.parse(line)); } catch { /* 坏行跳过 */ }
+    }
+    return events;
+  }
+  // 已关闭的会话不在 ctx.sessions 里，从磁盘日志补扫；只算今天，且跳过当前还在内存里扫过的会话。
+  async function scanArchivedSessions(day, liveIds, totals) {
+    const sessionsDir = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'sessions');
+    let groups = [];
+    try { groups = await readdir(sessionsDir, { withFileTypes: true }); } catch { return 0; }
+    let scanned = 0;
+    for (const group of groups) {
+      if (!group.isDirectory()) continue;
+      const groupDir = join(sessionsDir, group.name);
+      let entries = [];
+      try { entries = await readdir(groupDir, { withFileTypes: true }); } catch { continue; }
+      for (const entry of entries) {
+        if (!entry.isDirectory() || !entry.name.startsWith('session-')) continue;
+        if (liveIds.has(entry.name.slice('session-'.length))) continue;
+        let bytes;
+        try { bytes = await readFile(join(groupDir, entry.name, 'session.v4.jsonl.zstd')); } catch { continue; }
+        let route = null;
+        for (const event of decodeSessionLog(bytes)) {
+          if (event.type === 'request/header') {
+            const config = event.data?.header?.config;
+            if (config?.model) route = config;
+            continue;
+          }
+          const usage = usageFromEvent(event);
+          if (!usage || chinaDay(event.time) !== day) continue;
+          const expense = estimateExpense(usage, route, event.time);
+          if (expense === null) totals.unknown += 1;
+          else { totals.expense += expense; totals.known += 1; }
+        }
+        scanned += 1;
+      }
+    }
+    return scanned;
+  }
+  // 自检用：把今天的账清空，重扫当前会话 + 磁盘上已关闭的会话，按当前价格表重算一遍。
+  async function recomputeToday() {
+    const day = chinaDay(Date.now());
+    const totals = { expense: 0, known: 0, unknown: 0 };
+    ledger.days[day] = totals;
+    ledger.positions = {};
+    ledger.lastExpenseAt = 0;
+    sessions = new WeakMap();
+    const live = ctx.sessions.list();
+    for (const session of live) scan(session);
+    const archived = await scanArchivedSessions(day, new Set(live.map(session => session.id)), totals);
+    persistLedger();
+    return { day, sessions: live.length + archived, archived, today: totals, prices: priceState };
+  }
   ctx.effect(() => () => Promise.all([writes, configWrites, viewWrites]), 'salary-meter: drain data writes');
 
   const assets = new Map([
@@ -132,9 +209,13 @@ export async function apply(ctx) {
         config: saved.config, revision: saved.revision, view,
         today: ledger.days[chinaDay(Date.now())] ?? { expense: 0, known: 0, unknown: 0 },
         active: active.size, lastExpenseAt: ledger.lastExpenseAt,
-        error: writeError, priceDate: '2026-11-03',
+        error: writeError, priceDate: '2026-11-03', prices: priceState,
       }, { headers: { 'Cache-Control': 'no-store' } });
     },
+  });
+  ctx.connection.fetch.register({
+    path: '/api/salary-meter/recompute', methods: ['POST'], requestBody: 'buffered',
+    fetch: async () => Response.json(await recomputeToday(), { headers: { 'Cache-Control': 'no-store' } }),
   });
   ctx.connection.fetch.register({
     path: '/api/salary-meter/config', methods: ['PUT'], requestBody: 'buffered',

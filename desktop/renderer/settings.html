@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+<title>设置</title>
+<style>
+  :root{
+    --paper:#EDE9DF;
+    --paper-deep:#E2DCCE;
+    --shell:#F4F0E6;
+    --ink:#211E19;
+    --ink-2:#6E6758;
+    --ink-3:#9A9282;
+    --rule:#D2CBBA;
+    --amber:#FFBC55;
+    --amber-dim:#C68F3C;
+    --lamp-on:#E1502A;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  body{
+    background:radial-gradient(120% 90% at 50% -10%, #F5F2E9 0%, var(--paper) 45%, var(--paper-deep) 100%);
+    color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    font-size:13px;
+    padding:22px 24px 24px;
+    min-height:100vh;
+  }
+
+  .head{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    padding-bottom:11px;
+    border-bottom:1px solid var(--rule);
+    margin-bottom:18px;
+  }
+
+  .head h1{
+    font-family:"Songti SC","STSong","SimSun","Noto Serif SC",serif;
+    font-size:20px;
+    font-weight:600;
+    letter-spacing:.22em;
+    text-indent:.22em;
+    line-height:1;
+  }
+
+  .head span{
+    font-family:"Songti SC","STSong","SimSun",serif;
+    font-size:12px;
+    color:var(--ink-2);
+    letter-spacing:.06em;
+  }
+
+  .form{display:flex;flex-direction:column;gap:12px}
+
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field > label{font-size:11px;color:var(--ink-2);letter-spacing:.05em}
+
+  input[type=number],input[type=time]{
+    width:100%;
+    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-size:14px;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    background:#FCFAF3;
+    border:1px solid var(--rule);
+    border-radius:7px;
+    padding:8px 10px;
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+
+  input:focus{
+    outline:none;
+    border-color:var(--ink-2);
+    box-shadow:0 0 0 3px rgba(33,30,25,.08);
+  }
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  .check{
+    display:flex;align-items:center;gap:8px;
+    font-size:12px;color:var(--ink-2);
+    cursor:pointer;user-select:none;
+    margin-top:2px;
+  }
+  .check input{accent-color:var(--lamp-on);width:14px;height:14px;cursor:pointer}
+
+  /* 外观切换 */
+  .seg{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    border:1px solid var(--rule);
+    border-radius:7px;
+    overflow:hidden;
+    background:#FCFAF3;
+  }
+  .seg button{
+    font:inherit;
+    font-size:12px;
+    padding:8px 0;
+    border:0;
+    background:transparent;
+    color:var(--ink-2);
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .seg button + button{border-left:1px solid var(--rule)}
+  .seg button:hover{background:rgba(33,30,25,.05)}
+  .seg button.on{background:#211E19;color:#F4F0E6}
+  .seg button.on:hover{background:#211E19}
+
+  /* 数据条 */
+  .stats{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    border:1px solid var(--rule);
+    border-radius:10px;
+    background:rgba(255,255,255,.45);
+    overflow:hidden;
+    margin-top:18px;
+  }
+
+  .stat{
+    padding:10px 13px;
+    display:flex;flex-direction:column;gap:2px;
+    border-right:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);
+  }
+  .stat:nth-child(2n){border-right:none}
+  .stat:nth-child(n+3){border-bottom:none}
+
+  .stat b{
+    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-size:15px;font-weight:500;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat span{font-size:11px;color:var(--ink-2)}
+  .stat.hi b{color:#9A5B12}
+
+  .foot{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--rule);
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+
+  .hint{font-size:11px;color:var(--ink-3);line-height:1.7}
+
+  .diag{font-size:11px;color:var(--lamp-on);min-height:0}
+
+  .checkline{
+    font-size:11px;color:var(--ink-2);line-height:1.6;margin:0;
+    font-variant-numeric:tabular-nums;
+  }
+
+  .diagRow{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap}
+
+  #recompute{
+    font:inherit;font-size:12px;
+    padding:6px 12px;
+    color:var(--ink);
+    background:#FCFAF3;
+    border:1px solid var(--rule);
+    border-radius:7px;
+    cursor:pointer;
+    transition:background .15s ease,border-color .15s ease;
+  }
+  #recompute:hover{background:#F4EFE2;border-color:var(--ink-3)}
+  #recompute:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>设置</h1>
+  <span>改动即时生效</span>
+</div>
+
+<div class="form">
+  <div class="field">
+    <label for="salary">月薪（税后）</label>
+    <input id="salary" type="number" min="0" step="100" inputmode="decimal">
+  </div>
+
+  <div class="field">
+    <label for="days">每月工作日</label>
+    <input id="days" type="number" min="1" max="31" step="0.5" inputmode="decimal">
+  </div>
+
+  <div class="row2">
+    <div class="field">
+      <label for="start">上班时间</label>
+      <input id="start" type="time">
+    </div>
+    <div class="field">
+      <label for="end">下班时间</label>
+      <input id="end" type="time">
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="lunch">午休时长（小时）</label>
+    <input id="lunch" type="number" min="0" max="6" step="0.5" inputmode="decimal">
+  </div>
+
+  <label class="check">
+    <input id="weekend" type="checkbox">
+    <span>周末也算上班</span>
+  </label>
+
+  <div class="field">
+    <label>挂件外观</label>
+    <div class="seg" id="seg">
+      <button type="button" data-theme="dark">深色</button>
+      <button type="button" data-theme="light">浅白</button>
+      <button type="button" data-theme="gold">暗金</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>自检</label>
+    <p class="checkline" id="checkLine">正在读取…</p>
+    <div class="diagRow">
+      <button type="button" id="recompute">重算今天的账</button>
+      <span class="checkline" id="checkResult"></span>
+    </div>
+  </div>
+
+  <div class="diag" id="diag"></div>
+</div>
+
+<div class="stats">
+  <div class="stat"><b id="perSec">¥0.000</b><span>每秒</span></div>
+  <div class="stat"><b id="perHour">¥0.00</b><span>每小时</span></div>
+  <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
+  <div class="stat hi"><b id="perMonth">¥0.00</b><span>本月累计（估算）</span></div>
+</div>
+
+<div class="foot">
+  <label class="check">
+    <input id="login" type="checkbox">
+    <span>开机自动启动</span>
+  </label>
+  <p class="hint">
+    点挂件右上角的 ⋯ 打开这里，右上角 × 关闭。饭钱按已识别模型的 token 用量估算，
+    单价核对日期 2026-11-03。退出程序用托盘菜单里的「退出计价器」。
+  </p>
+</div>
+
+<script src="tauri-shim.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark' };
+  // 设置页现在是主窗口里的浮层 iframe：优先用宿主窗口的 api，单独打开时才走兜底
+  var hostApi = null;
+  try { hostApi = (window.parent && window.parent !== window) ? window.parent.api : null; } catch (e) { hostApi = null; }
+  var api = hostApi || window.api || {
+    getConfig: function () {
+      var s = {};
+      try { s = JSON.parse(localStorage.getItem('salary-widget-cfg') || '{}'); } catch (e) {}
+      return Promise.resolve(Object.assign({}, DEF, s));
+    },
+    setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} },
+    getLogin: function () { return Promise.resolve(false); },
+    setLogin: function () {},
+    getState: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
+    recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); }
+  };
+
+  var el = {
+    salary: document.getElementById('salary'),
+    days: document.getElementById('days'),
+    start: document.getElementById('start'),
+    end: document.getElementById('end'),
+    lunch: document.getElementById('lunch'),
+    weekend: document.getElementById('weekend'),
+    login: document.getElementById('login'),
+    diag: document.getElementById('diag'),
+    perSec: document.getElementById('perSec'),
+    perHour: document.getElementById('perHour'),
+    perDay: document.getElementById('perDay'),
+    perMonth: document.getElementById('perMonth'),
+    checkLine: document.getElementById('checkLine'),
+    checkResult: document.getElementById('checkResult'),
+    recompute: document.getElementById('recompute')
+  };
+
+  var cfg = Object.assign({}, DEF);
+  var currentTheme = 'dark';
+
+  function setTheme(t) {
+    currentTheme = (t === 'light' || t === 'gold') ? t : 'dark';
+    var btns = document.querySelectorAll('#seg button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', btns[i].getAttribute('data-theme') === currentTheme);
+    }
+  }
+
+  function num(v, d) { var n = parseFloat(v); return isFinite(n) ? n : d; }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function group(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function parseHM(s) {
+    var p = String(s).split(':');
+    var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+    return (isFinite(h) ? h : 0) * 3600 + (isFinite(m) ? m : 0) * 60;
+  }
+  function floorTo(v, n) {
+    var p = Math.pow(10, n);
+    if (!isFinite(v) || v <= 0) return 0;
+    return Math.floor(v * p + 1e-7) / p;
+  }
+  function money(v) {
+    var s = v.toFixed(2).split('.');
+    return group(s[0]) + '.' + s[1];
+  }
+
+  function readForm() {
+    return {
+      salary: Math.max(0, num(el.salary.value, 0)),
+      days: Math.max(1, num(el.days.value, 22)),
+      start: el.start.value || '09:00',
+      end: el.end.value || '18:00',
+      lunch: Math.max(0, num(el.lunch.value, 0)),
+      weekend: el.weekend.checked,
+      theme: currentTheme
+    };
+  }
+
+  function summarize(c) {
+    var ws = parseHM(c.start), we = parseHM(c.end);
+    var span = we - ws;
+    var workSec = span - c.lunch * 3600;
+    var dayPay = c.salary / Math.max(1, c.days);
+    var perSec = workSec > 0 ? dayPay / workSec : 0;
+
+    el.perSec.textContent = '¥' + floorTo(perSec, 3).toFixed(3);
+    el.perHour.textContent = '¥' + money(floorTo(workSec > 0 ? dayPay / (workSec / 3600) : 0, 2));
+    el.perDay.textContent = '¥' + money(floorTo(dayPay, 2));
+
+    // 本月估算：本月已过完的工作日 × 日薪 + 今日已赚
+    var now = new Date();
+    var done = 0;
+    for (var i = 1; i < now.getDate(); i++) {
+      var wd = new Date(now.getFullYear(), now.getMonth(), i).getDay();
+      if (wd !== 0 && wd !== 6) done++;
+    }
+
+    var nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    var wdToday = now.getDay();
+    var isRest = (wdToday === 0 || wdToday === 6) && !c.weekend;
+    var L0 = 12 * 3600;
+    if (L0 < ws) L0 = ws;
+    if (L0 + c.lunch * 3600 > we) L0 = we - c.lunch * 3600;
+    var lunchSec = c.lunch * 3600;
+    var overlap = 0;
+    if (lunchSec > 0) {
+      if (nowSec <= L0) overlap = 0;
+      else if (nowSec >= L0 + lunchSec) overlap = lunchSec;
+      else overlap = nowSec - L0;
+    }
+    var raw = nowSec > ws ? Math.min(nowSec, we) - ws : 0;
+    var billable = Math.max(0, Math.min(workSec, raw - overlap));
+    var earned = isRest ? 0 : perSec * billable;
+
+    el.perMonth.textContent = '¥' + money(floorTo(done * dayPay + earned, 2));
+
+    if (span <= 0) el.diag.textContent = '下班时间必须晚于上班时间';
+    else if (workSec <= 0) el.diag.textContent = '午休时长超过了在岗时长';
+    else el.diag.textContent = '';
+  }
+
+  function fill(c) {
+    el.salary.value = c.salary;
+    el.days.value = c.days;
+    el.start.value = c.start;
+    el.end.value = c.end;
+    el.lunch.value = c.lunch;
+    el.weekend.checked = !!c.weekend;
+    setTheme(c.theme);
+  }
+
+  var timer = null;
+  function push() {
+    cfg = readForm();
+    summarize(cfg);
+    clearTimeout(timer);
+    timer = setTimeout(function () { api.setConfig(cfg); }, 120);
+  }
+
+  ['salary', 'days', 'start', 'end', 'lunch'].forEach(function (k) {
+    el[k].addEventListener('input', push);
+  });
+  el.weekend.addEventListener('change', push);
+
+  var segBtns = document.querySelectorAll('#seg button');
+  for (var i = 0; i < segBtns.length; i++) {
+    segBtns[i].addEventListener('click', function () {
+      setTheme(this.getAttribute('data-theme'));
+      push();
+    });
+  }
+
+  el.login.addEventListener('change', function () { api.setLogin(el.login.checked); });
+
+  /* ---------------- 自检 ---------------- */
+  function showCheck(report) {
+    var today = report.today || {};
+    var prices = report.prices || {};
+    el.checkLine.textContent = '今日已算 ' + (today.known || 0) + ' 笔、未算 ' + (today.unknown || 0)
+      + ' 笔，合计 ¥' + Number(today.expense || 0).toFixed(2)
+      + '；价格表：' + (prices.source || '内置') + (prices.count ? '，' + prices.count + ' 个模型' : '');
+    if (typeof report.sessions === 'number') {
+      el.checkResult.textContent = '（扫了 ' + report.sessions + ' 个今天的会话）';
+    }
+  }
+
+  el.recompute.addEventListener('click', function () {
+    el.recompute.disabled = true;
+    el.checkResult.textContent = '正在重算…';
+    api.recompute().then(function (report) {
+      showCheck(report);
+    }).catch(function () {
+      el.checkResult.textContent = '重算失败，请再试一次';
+    }).then(function () {
+      el.recompute.disabled = false;
+    });
+  });
+
+  api.getState().then(showCheck).catch(function () {
+    el.checkLine.textContent = '自检读取失败';
+  });
+
+  api.getConfig().then(function (c) {
+    cfg = Object.assign({}, DEF, c || {});
+    fill(cfg);
+    summarize(cfg);
+  });
+
+  api.getLogin().then(function (v) { el.login.checked = !!v; });
+})();
+</script>
+</body>
+</html>

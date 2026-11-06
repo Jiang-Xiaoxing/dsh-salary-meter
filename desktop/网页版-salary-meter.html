@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>计价器 · 时间换钱</title>
+<style>
+  :root{
+    --paper:#EDE9DF;
+    --paper-deep:#E2DCCE;
+    --shell:#F4F0E6;
+    --shell-edge:#D8D2C1;
+    --ink:#211E19;
+    --ink-2:#6E6758;
+    --ink-3:#9A9282;
+    --rule:#D2CBBA;
+    --well:#211A12;
+    --well-2:#2B2217;
+    --amber:#FFBC55;
+    --amber-dim:#C68F3C;
+    --lamp-on:#E1502A;
+    --lamp-off:#A89C88;
+    --green:#4E7A4A;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  html,body{height:100%}
+
+  body{
+    background:
+      radial-gradient(120% 90% at 50% -10%, #F5F2E9 0%, var(--paper) 45%, var(--paper-deep) 100%);
+    color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif;
+    font-size:14px;
+    line-height:1.5;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:clamp(16px,4vw,56px);
+    min-height:100%;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    width:100%;
+    max-width:1060px;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+  }
+
+  /* ---------- 铭牌 ---------- */
+  .nameplate{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:20px;
+    padding:0 6px 12px;
+    border-bottom:1px solid var(--rule);
+  }
+
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+
+  .brand h1{
+    font-family:"Songti SC","STSong","SimSun","Noto Serif SC",serif;
+    font-size:26px;
+    font-weight:600;
+    letter-spacing:.24em;
+    text-indent:.24em;
+    line-height:1;
+  }
+
+  .tag{
+    font-family:"Songti SC","STSong","SimSun",serif;
+    font-size:13px;
+    color:var(--ink-2);
+    letter-spacing:.04em;
+  }
+
+  .meta{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    font-size:12px;
+    color:var(--ink-2);
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+
+  .ghost{
+    font:inherit;
+    font-size:12px;
+    color:var(--ink);
+    background:transparent;
+    border:1px solid var(--rule);
+    border-radius:999px;
+    padding:5px 14px;
+    cursor:pointer;
+    transition:background .15s ease, border-color .15s ease;
+  }
+  .ghost:hover{background:#fff;border-color:#BFB7A3}
+  .ghost:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+  /* ---------- 机身 ---------- */
+  .device{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 268px;
+    gap:0;
+    background:var(--shell);
+    border:1px solid var(--shell-edge);
+    border-radius:20px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.9) inset,
+      0 18px 34px -22px rgba(50,38,18,.55),
+      0 2px 6px -2px rgba(50,38,18,.14);
+    overflow:hidden;
+  }
+
+  /* ---------- LCD 屏 ---------- */
+  .lcd{
+    position:relative;
+    background:
+      radial-gradient(130% 100% at 20% 0%, var(--well-2) 0%, var(--well) 60%, #1A140D 100%);
+    padding:clamp(22px,3vw,30px) clamp(22px,3.4vw,38px) clamp(20px,2.6vw,26px);
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    gap:0;
+    min-height:330px;
+    overflow:hidden;
+  }
+
+  .mid{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:8px;
+    padding:10px 0;
+  }
+
+  .foot{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  .lcd::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background-image:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+    opacity:.5;
+  }
+
+  .lcd::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    box-shadow:inset 0 0 60px rgba(0,0,0,.55);
+    z-index:1;
+  }
+
+  .lcd > *{position:relative;z-index:2}
+
+  .statusline{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-family:"Cascadia Mono","Consolas","SF Mono",ui-monospace,monospace;
+    font-size:11px;
+    letter-spacing:.16em;
+    color:var(--amber-dim);
+  }
+
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--lamp-off);
+    box-shadow:0 0 0 1px rgba(0,0,0,.4) inset;
+    transition:background .25s ease, box-shadow .25s ease;
+    flex:none;
+  }
+  .dot.on{
+    background:var(--lamp-on);
+    box-shadow:0 0 10px rgba(225,80,42,.85), 0 0 0 1px rgba(0,0,0,.3) inset;
+  }
+  .dot.idle{background:#8A7C4E;box-shadow:0 0 8px rgba(180,160,90,.5)}
+
+  .statusline .spacer{flex:1}
+
+  /* ---------- 数字 ---------- */
+  .money{
+    display:flex;
+    align-items:baseline;
+    gap:2px;
+    font-family:"Cascadia Mono","Consolas","SF Mono",ui-monospace,monospace;
+    font-variant-numeric:tabular-nums;
+    color:var(--amber);
+    text-shadow:0 0 18px rgba(255,188,85,.32), 0 0 2px rgba(255,188,85,.6);
+    line-height:.92;
+    letter-spacing:-.01em;
+    white-space:nowrap;
+  }
+
+  .money .cur{font-size:clamp(26px,3.6vw,40px);opacity:.7;align-self:flex-start;padding-top:.2em}
+  .money .int{font-size:clamp(52px,12vw,120px);font-weight:500}
+  .money .dec{font-size:clamp(34px,5.8vw,68px);opacity:.92}
+  .money .sub{font-size:clamp(18px,3vw,32px);opacity:.38;margin-left:.1em}
+
+  .cap{
+    font-family:"Songti SC","STSong","SimSun",serif;
+    font-size:13px;
+    letter-spacing:.3em;
+    color:#DFA65B;
+    text-indent:.3em;
+  }
+
+  /* ---------- 进度槽 ---------- */
+  .meter{
+    position:relative;
+    height:9px;
+    border-radius:5px;
+    background:#150E06;
+    box-shadow:
+      inset 0 1px 3px rgba(0,0,0,.9),
+      inset 0 0 0 1px rgba(255,188,85,.16);
+    overflow:hidden;
+  }
+
+  .meter i{
+    display:block;
+    height:100%;
+    width:0%;
+    border-radius:5px;
+    background:linear-gradient(90deg,#7E5316 0%,#D08F2E 55%,var(--amber) 100%);
+    box-shadow:0 0 14px rgba(255,188,85,.55);
+    transition:width .35s linear;
+  }
+
+  .barfoot{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    color:var(--amber-dim);
+  }
+
+  /* ---------- 参数面板 ---------- */
+  .panel{
+    border-left:1px solid var(--shell-edge);
+    background:linear-gradient(180deg,#F7F3EA,#EFEADD);
+    padding:24px 20px;
+    display:flex;
+    flex-direction:column;
+    gap:13px;
+  }
+
+  .panel h2{
+    font-family:"Songti SC","STSong","SimSun",serif;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.34em;
+    color:var(--ink-2);
+    padding-bottom:9px;
+    border-bottom:1px solid var(--rule);
+  }
+
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field > span{font-size:11px;color:var(--ink-2);letter-spacing:.05em}
+
+  .field input[type=number],
+  .field input[type=time]{
+    width:100%;
+    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-size:15px;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    background:#FCFAF3;
+    border:1px solid var(--rule);
+    border-radius:7px;
+    padding:8px 10px;
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+
+  .field input:focus{
+    outline:none;
+    border-color:var(--ink-2);
+    box-shadow:0 0 0 3px rgba(33,30,25,.08);
+  }
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  .check{
+    display:flex;align-items:center;gap:8px;
+    font-size:12px;color:var(--ink-2);
+    cursor:pointer;user-select:none;
+    padding-top:2px;
+  }
+  .check input{accent-color:var(--lamp-on);width:14px;height:14px;cursor:pointer}
+
+  .diag{
+    font-size:11px;
+    color:var(--lamp-on);
+    min-height:0;
+    letter-spacing:.03em;
+  }
+
+  /* ---------- 底栏数据 ---------- */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    border:1px solid var(--rule);
+    border-radius:12px;
+    background:rgba(255,255,255,.42);
+    overflow:hidden;
+  }
+
+  .stat{
+    padding:12px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    border-right:1px solid var(--rule);
+  }
+  .stat:last-child{border-right:none}
+  .stat b{
+    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-size:17px;
+    font-weight:500;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em;
+  }
+  .stat span{font-size:11.5px;color:var(--ink-2)}
+
+  .hint{
+    text-align:center;
+    font-size:11px;
+    color:var(--ink-3);
+    letter-spacing:.06em;
+  }
+
+  /* ---------- 全屏显示器模式 ---------- */
+  body.fs{
+    padding:0;
+    background:#181208;
+  }
+  body.fs .page{max-width:none;height:100vh;gap:0}
+  body.fs .nameplate,
+  body.fs .panel,
+  body.fs .stats,
+  body.fs .hint,
+  body.fs .cap{display:none}
+  body.fs .device{
+    border:none;border-radius:0;box-shadow:none;background:transparent;
+    height:100%;grid-template-columns:1fr;
+  }
+  body.fs .lcd{
+    padding:5vh 5vw;
+    min-height:0;
+  }
+  body.fs .mid{gap:16px;align-items:center}
+  body.fs .money .int{font-size:clamp(84px,17vw,250px)}
+  body.fs .money .cur{font-size:clamp(30px,5vw,62px)}
+  body.fs .money .dec{font-size:clamp(52px,10vw,148px)}
+  body.fs .money .sub{font-size:clamp(26px,4.6vw,62px)}
+  body.fs .statusline{font-size:clamp(11px,1.2vw,16px);letter-spacing:.34em}
+  body.fs .foot{width:100%;max-width:860px;margin:0 auto}
+  body.fs .meter{height:10px}
+  body.fs .barfoot{font-size:clamp(11px,1.1vw,14px)}
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width:860px){
+    .device{grid-template-columns:1fr}
+    .panel{border-left:none;border-top:1px solid var(--shell-edge)}
+    .nameplate{flex-direction:column;align-items:flex-start;gap:10px}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .stat:nth-child(2){border-right:none}
+    .stat:nth-child(-n+2){border-bottom:1px solid var(--rule)}
+    .lcd{min-height:0;padding:20px 18px 18px}
+    .mid{padding:16px 0 20px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important}
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="nameplate">
+    <div class="brand">
+      <h1>计价器</h1>
+      <p class="tag">把上班的时间，换成看得见的钱</p>
+    </div>
+    <div class="meta">
+      <span id="dateText">—</span>
+      <button class="ghost" id="fsBtn">全屏</button>
+    </div>
+  </header>
+
+  <main class="device">
+    <section class="lcd" id="lcd">
+      <div class="statusline">
+        <span class="dot" id="dot"></span>
+        <span id="statusText">上班中</span>
+        <span class="spacer"></span>
+        <span id="clockText">00:00:00</span>
+      </div>
+
+      <div class="mid">
+        <div class="money">
+          <span class="cur">¥</span>
+          <span class="int" id="intPart">0</span>
+          <span class="dec">.<span id="centPart">00</span></span>
+          <span class="sub" id="subPart">00</span>
+        </div>
+        <div class="cap">今 日 已 赚</div>
+      </div>
+
+      <div class="foot">
+        <div class="meter"><i id="bar"></i></div>
+        <div class="barfoot">
+          <span id="leftText">—</span>
+          <span id="pctText">0%</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h2>参 数</h2>
+
+      <label class="field">
+        <span>月薪（税后）</span>
+        <input id="salary" type="number" min="0" step="100" value="10000" inputmode="decimal">
+      </label>
+
+      <label class="field">
+        <span>每月工作日</span>
+        <input id="days" type="number" min="1" max="31" step="0.5" value="22" inputmode="decimal">
+      </label>
+
+      <div class="row2">
+        <label class="field">
+          <span>上班</span>
+          <input id="start" type="time" value="09:00">
+        </label>
+        <label class="field">
+          <span>下班</span>
+          <input id="end" type="time" value="18:00">
+        </label>
+      </div>
+
+      <label class="field">
+        <span>午休（小时）</span>
+        <input id="lunch" type="number" min="0" max="6" step="0.5" value="1" inputmode="decimal">
+      </label>
+
+      <label class="check">
+        <input id="weekend" type="checkbox">
+        <span>周末也算上班</span>
+      </label>
+
+      <div class="diag" id="diag"></div>
+    </aside>
+  </main>
+
+  <div class="stats">
+    <div class="stat"><b id="perSec">¥0.000</b><span>每秒</span></div>
+    <div class="stat"><b id="perHour">¥0.00</b><span>每小时</span></div>
+    <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
+    <div class="stat"><b id="perMonth">¥0.00</b><span>本月累计</span></div>
+  </div>
+
+  <p class="hint">按 F 全屏显示，参数只保存在这台电脑上</p>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var el = {
+    salary:  document.getElementById('salary'),
+    days:    document.getElementById('days'),
+    start:   document.getElementById('start'),
+    end:     document.getElementById('end'),
+    lunch:   document.getElementById('lunch'),
+    weekend: document.getElementById('weekend'),
+    ds:      document.getElementById('diag'),
+
+    int:     document.getElementById('intPart'),
+    cent:    document.getElementById('centPart'),
+    sub:     document.getElementById('subPart'),
+    status:  document.getElementById('statusText'),
+    dot:     document.getElementById('dot'),
+    clock:   document.getElementById('clockText'),
+    bar:     document.getElementById('bar'),
+    left:    document.getElementById('leftText'),
+    pct:     document.getElementById('pctText'),
+    date:    document.getElementById('dateText'),
+
+    perSec:  document.getElementById('perSec'),
+    perHour: document.getElementById('perHour'),
+    perDay:  document.getElementById('perDay'),
+    perMonth:document.getElementById('perMonth')
+  };
+
+  var KEY = 'salary-meter-v1';
+
+  /* ---------- 参数存取 ---------- */
+  function readCfg(){
+    return {
+      salary: num(el.salary.value, 0),
+      days:   Math.max(1, num(el.days.value, 22)),
+      start:  el.start.value || '09:00',
+      end:    el.end.value || '18:00',
+      lunch:  Math.max(0, num(el.lunch.value, 0)),
+      weekend: el.weekend.checked
+    };
+  }
+
+  function num(v, d){
+    var n = parseFloat(v);
+    return isFinite(n) ? n : d;
+  }
+
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(readCfg())); }catch(e){}
+  }
+
+  function load(){
+    var raw;
+    try{ raw = localStorage.getItem(KEY); }catch(e){ return; }
+    if(!raw) return;
+    var c;
+    try{ c = JSON.parse(raw); }catch(e){ return; }
+    if(!c) return;
+    if(c.salary != null) el.salary.value = c.salary;
+    if(c.days   != null) el.days.value   = c.days;
+    if(c.start)          el.start.value  = c.start;
+    if(c.end)            el.end.value    = c.end;
+    if(c.lunch  != null) el.lunch.value  = c.lunch;
+    el.weekend.checked = !!c.weekend;
+  }
+
+  /* ---------- 工具 ---------- */
+  function parseHM(s){
+    var p = String(s).split(':');
+    var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+    if(!isFinite(h)) h = 0;
+    if(!isFinite(m)) m = 0;
+    return h * 3600 + m * 60;
+  }
+
+  function mmss(sec){
+    sec = Math.max(0, Math.floor(sec));
+    var h = Math.floor(sec/3600);
+    var m = Math.floor(sec%3600/60);
+    var s = sec%60;
+    return (h>0 ? h + ' 小时 ' : '') + m + ' 分 ' + s + ' 秒';
+  }
+
+  function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+  function group(n){
+    var s = String(n);
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  // 向下取整到指定小数位：只展示"已经赚到"的钱，不虚报
+  function floorTo(v, n){
+    var p = Math.pow(10, n);
+    if(!isFinite(v) || v <= 0) return 0;
+    return Math.floor(v * p + 1e-7) / p;
+  }
+
+  // 金额加千分位，固定两位小数
+  function money(v){
+    var s = v.toFixed(2).split('.');
+    return group(s[0]) + '.' + s[1];
+  }
+
+  var WEEK = ['周日','周一','周二','周三','周四','周五','周六'];
+
+  /* ---------- 核心计算 ---------- */
+  function compute(now){
+    var c = readCfg();
+
+    var ws = parseHM(c.start);
+    var we = parseHM(c.end);
+    var lunchSec = c.lunch * 3600;
+
+    var spanSec = we - ws;                        // 在岗总时长
+    var workSec = spanSec - lunchSec;              // 有效工作时长
+    var dayPay = c.salary / c.days;                // 日薪
+    var perSec = workSec > 0 ? dayPay / workSec : 0;
+
+    var nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds() + now.getMilliseconds()/1000;
+
+    var weekday = now.getDay();
+    var isRestDay = (weekday === 0 || weekday === 6) && !c.weekend;
+
+    // 午休窗口：以 12:00 为起点，越界则回贴到下班前
+    var L0 = 12*3600;
+    if(L0 < ws) L0 = ws;
+    if(L0 + lunchSec > we) L0 = we - lunchSec;
+
+    var lunchOverlap = 0;
+    if(lunchSec > 0){
+      if(nowSec <= L0) lunchOverlap = 0;
+      else if(nowSec >= L0 + lunchSec) lunchOverlap = lunchSec;
+      else lunchOverlap = nowSec - L0;
+    }
+
+    var rawElapsed = 0;
+    if(nowSec > ws) rawElapsed = Math.min(nowSec, we) - ws;
+
+    var billable = rawElapsed - lunchOverlap;
+    billable = Math.max(0, Math.min(workSec, billable));
+
+    var earned = perSec * billable;
+    var pct = workSec > 0 ? billable / workSec : 0;
+
+    var status, state;
+    if(isRestDay){ status = '休 息 日'; state = 'idle'; }
+    else if(nowSec < ws){ status = '未 开 工'; state = 'idle'; }
+    else if(nowSec >= we){ status = '已 收 工'; state = 'off'; }
+    else if(lunchSec > 0 && nowSec > L0 && nowSec < L0 + lunchSec){ status = '午 休 中'; state = 'idle'; }
+    else { status = '上 班 中'; state = 'on'; }
+
+    // 本月估算：本月已过完的工作日 × 日薪 + 今日
+    var monthDone = 0;
+    var y = now.getFullYear(), mo = now.getMonth(), d = now.getDate();
+    for(var i = 1; i < d; i++){
+      var wd = new Date(y, mo, i).getDay();
+      if(wd !== 0 && wd !== 6) monthDone++;
+    }
+    var monthEarned = monthDone * dayPay + earned;
+
+    // 距下班
+    var leftSec = Math.max(0, we - nowSec);
+
+    return {
+      cfg: c, ws: ws, we: we, workSec: workSec, spanSec: spanSec,
+      dayPay: dayPay, perSec: perSec, earned: earned, pct: pct,
+      status: status, state: state, monthEarned: monthEarned,
+      leftSec: leftSec, nowSec: nowSec, lunchSec: lunchSec, L0: L0,
+      billable: billable, isRestDay: isRestDay
+    };
+  }
+
+  /* ---------- 渲染 ---------- */
+  var lastCent = -1;
+
+  function paint(){
+    var now = new Date();
+    var r = compute(now);
+
+    // 金额：整数 / 分 / 万分位（整体按 4 位截断，避免各段进位打架）
+    var q = floorTo(r.earned, 4);
+    var micro = Math.round(q * 10000);
+    var intPart = Math.floor(micro / 10000);
+    var centPart = Math.floor(micro / 100) % 100;
+    var subPart = micro % 100;
+
+    el.int.textContent = group(intPart);
+    el.cent.textContent = pad(centPart);
+    el.sub.textContent = pad(subPart);
+
+    // 状态灯
+    el.status.textContent = r.status;
+    el.dot.className = 'dot' + (r.state === 'on' ? ' on' : r.state === 'idle' ? ' idle' : '');
+
+    // 时钟
+    el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+
+    // 进度
+    var pctTxt = Math.round(r.pct * 100);
+    el.bar.style.width = (r.pct * 100).toFixed(2) + '%';
+    el.pct.textContent = pctTxt + '%';
+
+    // 剩余时间文案
+    if(r.isRestDay){
+      el.left.textContent = '今天休息，不计费';
+    } else if(r.nowSec < r.ws){
+      el.left.textContent = '距开工 ' + mmss(r.ws - r.nowSec);
+    } else if(r.nowSec >= r.we){
+      el.left.textContent = '今日已收工';
+    } else if(r.lunchSec > 0 && r.nowSec > r.L0 && r.nowSec < r.L0 + r.lunchSec){
+      el.left.textContent = '午休中 · 还剩 ' + mmss(r.L0 + r.lunchSec - r.nowSec);
+    } else {
+      el.left.textContent = '距下班 ' + mmss(r.leftSec);
+    }
+
+    // 底栏
+    el.perSec.textContent  = '¥' + floorTo(r.perSec, 3).toFixed(3);
+    el.perHour.textContent = '¥' + money(floorTo(r.dayPay / (r.workSec/3600 || 1), 2));
+    el.perDay.textContent  = '¥' + money(floorTo(r.dayPay, 2));
+    el.perMonth.textContent= '¥' + money(floorTo(r.monthEarned, 2));
+
+    // 诊断
+    if(r.spanSec <= 0){
+      el.ds.textContent = '下班时间必须晚于上班时间';
+    } else if(r.workSec <= 0){
+      el.ds.textContent = '午休时长超过了在岗时长';
+    } else {
+      el.ds.textContent = '';
+    }
+
+    // 日期
+    el.date.textContent = (now.getMonth()+1) + '月' + now.getDate() + '日 ' + WEEK[now.getDay()];
+  }
+
+  /* ---------- 循环 ---------- */
+  var raf = null, timer = null;
+
+  function loop(){
+    paint();
+    timer = setTimeout(loop, 100);
+  }
+
+  /* ---------- 全屏 ---------- */
+  function toggleFS(){
+    if(document.body.classList.contains('fs')){
+      document.body.classList.remove('fs');
+      if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+    } else {
+      document.body.classList.add('fs');
+      var d = document.documentElement;
+      if(d.requestFullscreen) d.requestFullscreen().catch(function(){});
+    }
+  }
+
+  document.getElementById('fsBtn').addEventListener('click', toggleFS);
+
+  document.addEventListener('fullscreenchange', function(){
+    if(!document.fullscreenElement) document.body.classList.remove('fs');
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) {
+      if(e.key === 'Escape' && e.target.blur) e.target.blur();
+      return;
+    }
+    if(e.key === 'f' || e.key === 'F'){ e.preventDefault(); toggleFS(); }
+    if(e.key === 'Escape'){ document.body.classList.remove('fs'); }
+  });
+
+  /* ---------- 初始化 ---------- */
+  load();
+  ['salary','days','start','end','lunch'].forEach(function(k){
+    el[k].addEventListener('input', function(){ save(); paint(); });
+  });
+  el.weekend.addEventListener('change', function(){ save(); paint(); });
+
+  paint();
+  loop();
+})();
+</script>
+</body>
+</html>

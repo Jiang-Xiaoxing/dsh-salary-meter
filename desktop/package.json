@@ -1,0 +1,19 @@
+{
+  "name": "salary-widget",
+  "version": "0.1.0",
+  "description": "桌面工资计价器 · 悬浮挂件",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "electron": "^45.2.1"
+  }
+}

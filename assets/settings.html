@@ -15,6 +15,10 @@ input { width: 100%; height: 34px; border: .5px solid var(--dsw-alias-border-l2,
 .themeRow { display: flex; gap: 8px; }
 .themeRow button { flex: 1; background: var(--dsw-alias-bg-layer-2, #2c2c2e); color: inherit; border: .5px solid var(--dsw-alias-border-l2, #ffffff25); border-radius: 12px; padding: 8px 12px; font: inherit; cursor: pointer; }
 .themeRow button.on { border-color: var(--dsw-alias-state-business-primary, #8398ff); color: var(--dsw-alias-state-business-primary, #8398ff); }
+.opacityRow { margin-top: 14px; }
+.opacityRow label { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 6px; }
+.opacityRow output { font-variant-numeric: tabular-nums; }
+.opacityRow input[type=range] { width: 100%; height: 22px; padding: 0; background: transparent; border: 0; accent-color: var(--dsw-alias-state-business-primary, #8398ff); }
 .check-line { margin: 6px 0 8px; color: var(--dsw-alias-label-secondary, #a3a7b3); }
 #recompute { background: var(--dsw-alias-bg-layer-2, #2c2c2e); color: inherit; border: .5px solid var(--dsw-alias-border-l2, #ffffff25); border-radius: 12px; padding: 8px 12px; font: inherit; cursor: pointer; }
 #recompute:disabled { opacity: .5; cursor: default; }
@@ -33,6 +37,10 @@ button[type=submit]:disabled { opacity: .5; cursor: default; }
   <label class="check"><input id="weekend" type="checkbox">周末也算上班</label>
   <h2>外观</h2>
   <div class="themeRow" id="themeRow"><button type="button" data-theme="dark">深色</button><button type="button" data-theme="light">浅白</button><button type="button" data-theme="gold">暗金</button></div>
+  <div class="opacityRow">
+    <label for="opacity">背景不透明度 <output id="opacityValue" for="opacity">85%</output></label>
+    <input id="opacity" type="range" min="0" max="100" step="1" value="85">
+  </div>
   <h2>自检</h2>
   <p class="check-line" id="checkLine">正在读取…</p>
   <button type="button" id="recompute">重算今天的账</button>
@@ -54,6 +62,23 @@ function setTheme(value) {
 for (const button of document.querySelectorAll('#themeRow button')) button.addEventListener('click', () => {
   setTheme(button.dataset.theme);
   parent.postMessage({ type: 'salary-meter:theme', theme: currentTheme }, location.origin);
+});
+let currentOpacity = 0.85;
+let opacityTimer;
+const opacityInput = document.getElementById('opacity');
+const opacityValue = document.getElementById('opacityValue');
+function setOpacity(value) {
+  const pct = Math.min(100, Math.max(0, Math.round(Number(value) || 85)));
+  currentOpacity = pct / 100;
+  opacityInput.value = String(pct);
+  opacityValue.textContent = `${pct}%`;
+}
+opacityInput.addEventListener('input', () => {
+  setOpacity(opacityInput.value);
+  clearTimeout(opacityTimer);
+  opacityTimer = setTimeout(() => {
+    parent.postMessage({ type: 'salary-meter:opacity', opacity: currentOpacity }, location.origin);
+  }, 220);
 });
 const checkLine = document.getElementById('checkLine');
 const recompute = document.getElementById('recompute');
@@ -85,6 +110,7 @@ async function load() {
     else input.value = state.config[key];
   }
   setTheme(state.view && state.view.theme);
+  setOpacity((state.view && typeof state.view.opacity === 'number' ? state.view.opacity : 0.85) * 100);
   showCheck(state);
   save.disabled = false;
 }

@@ -11,7 +11,9 @@
   height: 88px;
   max-width: calc(100vw - 24px);
   border-radius: var(--dsw-radius-lg, 14px);
-  background: var(--sm-bg);
+  background: var(--sm-surface, var(--sm-bg));
+  -webkit-backdrop-filter: var(--sm-backdrop, none);
+  backdrop-filter: var(--sm-backdrop, none);
   color: var(--sm-text);
   box-shadow: var(--dsw-elevation-panel, 0 0 0 .5px #ffffff1d, 0 7px 20px #0003);
   font-family: var(--dsw-font-family, 'Microsoft YaHei', sans-serif);

@@ -99,9 +99,21 @@ window.__ModuleLoader__.load({
             .then(value => setSnapshot(previous => previous ? { ...previous, view: value } : previous))
             .catch(() => {});
         }
+        function savedOpacity(event) {
+          const frame = dialog.current?.querySelector('iframe');
+          if (event.origin !== location.origin || event.source !== frame?.contentWindow || event.data?.type !== 'salary-meter:opacity') return;
+          const opacity = Number(event.data.opacity);
+          if (!Number.isFinite(opacity)) return;
+          const clamped = Math.min(1, Math.max(0, Math.round(opacity * 100) / 100));
+          fetch('/api/salary-meter/view', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opacity: clamped }) })
+            .then(response => response.json())
+            .then(value => setSnapshot(previous => previous ? { ...previous, view: value } : previous))
+            .catch(() => {});
+        }
         window.addEventListener('message', savedSettings);
         window.addEventListener('message', savedTheme);
-        return () => { window.removeEventListener('message', savedSettings); window.removeEventListener('message', savedTheme); };
+        window.addEventListener('message', savedOpacity);
+        return () => { window.removeEventListener('message', savedSettings); window.removeEventListener('message', savedTheme); window.removeEventListener('message', savedOpacity); };
       }, []);
       useEffect(() => {
         if (!snapshot) return;
@@ -177,11 +189,15 @@ window.__ModuleLoader__.load({
         : theme === 'gold'
           ? { '--sm-bg': '#1f1a13', '--sm-text': '#d6b36a', '--sm-muted': '#9c8a63', '--sm-line': '#ffffff14', '--dsw-specific-bubble': '#3a2f1d', '--sm-blue': '#c9a227' }
           : { '--sm-bg': '#232324', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c' };
+      const opacity = typeof snapshot.view.opacity === 'number' && snapshot.view.opacity >= 0 && snapshot.view.opacity <= 1 ? snapshot.view.opacity : 0.85;
+      const baseBg = theme === 'light' ? '#f7f8fa' : theme === 'gold' ? '#1f1a13' : '#232324';
+      const surface = `rgba(${parseInt(baseBg.slice(1, 3), 16)}, ${parseInt(baseBg.slice(3, 5), 16)}, ${parseInt(baseBg.slice(5, 7), 16)}, ${opacity})`;
+      const backdrop = opacity < 0.995 ? 'blur(14px) saturate(1.15)' : 'none';
       const clockText = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
       const money = value => value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const expenseText = expenses > 0 && expenses < 0.01 ? expenses.toFixed(4) : money(expenses);
       const feeDescription = '按已识别的 DeepSeek 官方模型 token 和 2026-11-03 单价估算。节假日调整、搜索抓取、辅助调用和第三方模型费用未纳入。';
-      return createPortal(h('section', { ref: widget, 'data-salary-meter': true, 'data-expanded': expanded, 'data-theme': theme, className: 'sm-widget', 'aria-label': '打工养肥鱼', style: palette },
+      return createPortal(h('section', { ref: widget, 'data-salary-meter': true, 'data-expanded': expanded, 'data-theme': theme, className: 'sm-widget', 'aria-label': '打工养肥鱼', style: { ...palette, '--sm-surface': surface, '--sm-backdrop': backdrop } },
         h('div', { className: 'sm-top',
           onPointerDown: event => {
             if (event.target.closest('button')) return;

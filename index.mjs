@@ -1,4 +1,4 @@
-import { readFile, readdir, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
+﻿import { readFile, readdir, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
 import { zstdDecompressSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
@@ -44,7 +44,8 @@ export async function apply(ctx) {
   }
   saved.config = validateConfig(saved.config);
   const savedView = await readJson(viewFile, null);
-  let view = { expanded: savedView?.expanded === true, theme: ['light', 'gold'].includes(savedView?.theme) ? savedView.theme : 'dark', revision: savedView?.revision ?? 0 };
+  const savedOpacity = typeof savedView?.opacity === 'number' && savedView.opacity >= 0 && savedView.opacity <= 1 ? savedView.opacity : 0.85;
+  let view = { expanded: savedView?.expanded === true, theme: ['light', 'gold'].includes(savedView?.theme) ? savedView.theme : 'dark', opacity: savedOpacity, revision: savedView?.revision ?? 0 };
   const ledger = await readJson(ledgerFile, { days: {}, positions: {}, lastExpenseAt: 0 });
   const priceCacheFile = join(root, 'prices-cache.json');
   let priceState = { source: '内置', fetchedAt: null, count: Object.keys(defaultPrices()).length };
@@ -245,11 +246,15 @@ export async function apply(ctx) {
       let body;
       try { body = JSON.parse(text); }
       catch { return Response.json({ error: '显示设置格式错误' }, { status: 400 }); }
-      if (typeof body?.expanded !== 'boolean' && !['dark', 'light', 'gold'].includes(body?.theme)) return Response.json({ error: '请选择收起或展开人物' }, { status: 400 });
+      const hasExpanded = typeof body?.expanded === 'boolean';
+      const hasTheme = ['dark', 'light', 'gold'].includes(body?.theme);
+      const hasOpacity = typeof body?.opacity === 'number' && Number.isFinite(body.opacity) && body.opacity >= 0 && body.opacity <= 1;
+      if (!hasExpanded && !hasTheme && !hasOpacity) return Response.json({ error: '请选择收起或展开人物' }, { status: 400 });
       const operation = viewWrites.then(async () => {
         const next = {
-          expanded: typeof body?.expanded === 'boolean' ? body.expanded : view.expanded,
-          theme: ['dark', 'light', 'gold'].includes(body?.theme) ? body.theme : view.theme,
+          expanded: hasExpanded ? body.expanded : view.expanded,
+          theme: hasTheme ? body.theme : view.theme,
+          opacity: hasOpacity ? Math.round(body.opacity * 100) / 100 : view.opacity,
           revision: view.revision + 1,
         };
         await atomicJson(viewFile, next);

@@ -14,9 +14,9 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 
 /* 胶囊外观：和 DS Bot 里的插件挂件同尺寸，四周留 10px 透明边给投影 */
-const WIN_W: f64 = 268.0;
-const WIN_COLLAPSED_H: f64 = 108.0;
-const WIN_EXPANDED_H: f64 = 248.0;
+const WIN_W: f64 = 460.0;
+const WIN_COLLAPSED_H: f64 = 410.0;
+const WIN_EXPANDED_H: f64 = 520.0;
 
 /* ------------------------------------------------------------------ 配置 */
 
@@ -31,6 +31,8 @@ struct Config {
     weekend: bool,
     theme: String,
     character: String,
+    #[serde(rename = "petScale")]
+    pet_scale: f64,
     expanded: bool,
 }
 
@@ -45,6 +47,7 @@ impl Default for Config {
             weekend: false,
             theme: "dark".to_string(),
             character: "webm".to_string(),
+            pet_scale: 130.0,
             expanded: false,
         }
     }
@@ -274,6 +277,9 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
         };
     }
 
+    if let Some(v) = patch.get("petScale").and_then(|v| v.as_f64()) {
+        cfg.pet_scale = v.clamp(80.0, 160.0);
+    }
     save_config(&app, &cfg);
     let _ = app.emit("config-changed", &cfg);
     sync_menu(&app, &cfg);

@@ -233,6 +233,11 @@
   </div>
 
   <div class="field">
+    <label for="petScale">人物大小 <output id="petScaleValue">130%</output></label>
+    <input id="petScale" type="range" min="80" max="160" step="5" value="130" style="width:100%;accent-color:#526eff">
+    <button id="resetPetScale" type="button">恢复默认大小</button>
+  </div>
+  <div class="field">
     <label>自检</label>
     <p class="checkline" id="checkLine">正在读取…</p>
     <div class="diagRow">
@@ -348,7 +353,8 @@
       lunch: Math.max(0, num(el.lunch.value, 0)),
       weekend: el.weekend.checked,
       theme: currentTheme,
-      character: currentCharacter
+      character: currentCharacter,
+      petScale: Number(document.getElementById("petScale").value)
     };
   }
 
@@ -404,8 +410,19 @@
     el.weekend.checked = !!c.weekend;
     setTheme(c.theme);
     setCharacter(c.character);
+    document.getElementById("petScale").value = c.petScale || 130;
+    document.getElementById("petScaleValue").textContent = (c.petScale || 130) + "%";
   }
 
+  document.getElementById('petScale').addEventListener('input', function () {
+    document.getElementById('petScaleValue').textContent = this.value + '%';
+    push();
+  });
+  document.getElementById('resetPetScale').addEventListener('click', function () {
+    document.getElementById('petScale').value = 130;
+    document.getElementById('petScaleValue').textContent = '130%';
+    push();
+  });
   var timer = null;
   function push() {
     cfg = readForm();

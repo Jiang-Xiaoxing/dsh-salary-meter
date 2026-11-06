@@ -56,7 +56,6 @@
   window.addEventListener('DOMContentLoaded', function () {
     var nodes = document.querySelectorAll(
       '[data-salary-meter], .sm-top, .sm-top span, .sm-top time, .sm-top b, ' +
-      '.sm-balance, .sm-balance small, .sm-balance > span, ' +
       '.sm-worktime, .sm-worktime span, .sm-worktime b, ' +
       '.sm-ledger, .sm-ledger div, .sm-ledger label, .sm-ledger b, ' +
       '.sm-layer-bar, .sm-layer-bar span'

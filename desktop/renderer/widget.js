@@ -7,7 +7,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 (function () {
   'use strict';
 
-  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark', character: 'webm', expanded: false };
+  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, theme: 'dark', character: 'webm', petScale: 130, expanded: false };
 
   const PALETTES = {
     dark: { '--sm-bg': '#232324', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
@@ -75,6 +75,8 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   let cfg = Object.assign({}, DEF);
   let today = { expense: 0, known: 0, unknown: 0 };
   let expanded = false;
+  let bubbleUntil = 0;
+  let bubbleScene = null;
   let mascot = null;
   let mascotTries = 0;
   let mascotGeneration = 0;
@@ -169,25 +171,17 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     const palette = PALETTES[cfg.theme] || PALETTES.dark;
     const style = el.widget.style;
     for (const key of Object.keys(palette)) style.setProperty(key, palette[key]);
+    style.setProperty('--pet-scale', Math.max(80, Math.min(160, num(cfg.petScale, 130))) / 130);
     el.widget.dataset.theme = PALETTES[cfg.theme] ? cfg.theme : 'dark';
   }
 
   function applyExpanded() {
-    el.widget.dataset.expanded = expanded ? 'true' : 'false';
-    el.toggle.textContent = expanded ? '收起 ⌄' : '展开 ⌃';
-    el.toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    el.toggle.setAttribute('aria-label', expanded ? '收起人物' : '展开人物');
-    if (expanded) {
-      if (useVideo()) {
-        playScene(currentScene());
-      } else {
-        // 窗口要等 Rust 那边改完高度再建画布，否则 WebView 一变形 WebGL 上下文就可能丢
-        setTimeout(() => { if (expanded && !useVideo()) ensureMascot(); }, 260);
-      }
-    } else {
-      stopVideos();
-      disposeMascot();
-    }
+    el.widget.dataset.expanded = String(expanded);
+    el.toggle.textContent = expanded ? '⌄' : '⌃';
+    el.toggle.setAttribute('aria-expanded', String(expanded));
+    el.toggle.setAttribute('aria-label', expanded ? '收起账目' : '展开账目');
+    if (useVideo()) playScene(currentScene());
+    else setTimeout(() => { if (!useVideo()) ensureMascot(); }, 260);
   }
 
   function paint() {
@@ -196,12 +190,12 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     const partial = today.unknown > 0;
     const amount = wage.earned - today.expense;
 
-    el.statusTitle.textContent = '碗里还剩';
+    el.statusTitle.textContent = '今日账目';
     el.statusTitle.title = wage.status.replace(/\s/g, '');
     el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 
-    const text = money(Math.abs(amount));
-    el.prefix.textContent = (partial ? '≤ ¥' : '≈ ¥');
+    const text = (amount < 0 ? '−' : '') + money(Math.abs(amount));
+    el.prefix.textContent = partial ? '≤ ¥' : '¥';
     el.value.textContent = text;
     el.value.style.setProperty('--sm-digits', text.length);
 
@@ -216,9 +210,13 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     el.spent.textContent = (partial ? '≥' : '−') + ' ¥' + expenseText();
     el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
-    if (expanded) {
+    {
       if (useVideo()) {
         const scene = pickScene({ phase: wage.phase, busy: Date.now() < busyUntil, caught: performance.now() < caughtUntil });
+        if (bubbleScene !== scene) {
+          bubbleScene = scene;
+          bubbleUntil = performance.now() + 4500;
+        }
         playScene(scene);
         el.bubble.textContent = sceneBubble(scene);
       } else {
@@ -227,6 +225,8 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
       }
     }
 
+    el.bubble.hidden = performance.now() >= bubbleUntil;
+    pick('petStatus').textContent = wage.status.replace(/\s/g, '');
     if (mascot) mascot.setBusy(Date.now() < busyUntil);
   }
 
@@ -248,17 +248,17 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   /* -------------------------------------------------------------- 人物 */
 
   async function ensureMascot() {
-    if (mascot || mascotLoading || !expanded || useVideo()) return;
+    if (mascot || mascotLoading || useVideo()) return;
     const generation = mascotGeneration;
     mascotLoading = true;
     try {
       const module = await import('./assets/mascot.mjs');
-      if (!expanded || useVideo() || generation !== mascotGeneration || mascot) return;
+      if (useVideo() || generation !== mascotGeneration || mascot) return;
       const controller = await module.createWhaleAnimation(el.canvas, {
         onAction: value => { action = value; paint(); },
         onError: () => { if (generation === mascotGeneration && !useVideo()) mascotFailed(); },
       });
-      if (!expanded || useVideo() || generation !== mascotGeneration || mascot) {
+      if (useVideo() || generation !== mascotGeneration || mascot) {
         if (controller) controller.dispose();
         return;
       }
@@ -279,7 +279,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     mascot = null;
     el.canvas.hidden = true;
     el.fallbackImg.hidden = false;
-    if (!expanded || useVideo()) return;
+    if (useVideo()) return;
     if (mascotTries >= 5) return;
     mascotTries += 1;
     const stale = el.canvas;
@@ -287,7 +287,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     fresh.removeAttribute('data-action');
     stale.replaceWith(fresh);
     el.canvas = fresh;
-    setTimeout(() => { if (expanded && !useVideo() && !mascot) ensureMascot(); }, 400 * mascotTries);
+    setTimeout(() => { if (!useVideo() && !mascot) ensureMascot(); }, 400 * mascotTries);
   }
 
   function disposeMascot() {
@@ -333,22 +333,20 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
   // 展开时按当前人物类型启动：视频立刻播，图集要等窗口变完形再建画布
   function startCharacter() {
-    if (!expanded) return;
     if (syncCharacterVisibility()) {
       disposeMascot();
       sceneCurrent = null;
       playScene(currentScene());
     } else {
       stopVideos();
-      setTimeout(() => { if (expanded && !useVideo()) ensureMascot(); }, 260);
+      setTimeout(() => { if (!useVideo()) ensureMascot(); }, 260);
     }
   }
 
   function applyCharacter() {
     videoBroken = false;
     syncCharacterVisibility();
-    if (expanded) startCharacter();
-    else stopVideos();
+    startCharacter();
   }
 
   function stopVideos() {
@@ -364,7 +362,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
   // 两块 video 轮流装场景，切换时交叉淡入
   function playScene(scene) {
-    if (!scene || !expanded || !useVideo()) return;
+    if (!scene || !useVideo()) return;
     if (scene === sceneCurrent) return;
     sceneCurrent = scene;
     const videos = el.videos;
@@ -428,6 +426,9 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     try { await api.setExpanded(next); } catch (error) { showError('窗口尺寸保存失败'); }
   });
 
+  pick('balanceRow').addEventListener('click', event => { if (!event.target.closest('button')) el.toggle.click(); });
+  pick('balanceRow').addEventListener('keydown', event => { if (event.target === pick('balanceRow') && ['Enter', ' '].includes(event.key)) { event.preventDefault(); el.toggle.click(); } });
+
   el.settingsBtn.addEventListener('click', () => openSettings());
 
   el.settingsClose.addEventListener('click', () => closeSettings());
@@ -462,6 +463,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
   el.mascotBtn.addEventListener('click', () => {
     caughtUntil = performance.now() + 2500;
+    bubbleUntil = performance.now() + 4500;
     if (mascot) mascot.catch();
     paint();
   });

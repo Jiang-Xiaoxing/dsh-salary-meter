@@ -77,6 +77,8 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   let expanded = false;
   let mascot = null;
   let mascotTries = 0;
+  let mascotGeneration = 0;
+  let mascotLoading = false;
   let toggleGuardUntil = 0;
   let action = 'idle';
   let caughtUntil = 0;
@@ -246,15 +248,17 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   /* -------------------------------------------------------------- 人物 */
 
   async function ensureMascot() {
-    if (mascot || !expanded) return;
+    if (mascot || mascotLoading || !expanded || useVideo()) return;
+    const generation = mascotGeneration;
+    mascotLoading = true;
     try {
       const module = await import('./assets/mascot.mjs');
-      if (!expanded || mascot) return;
+      if (!expanded || useVideo() || generation !== mascotGeneration || mascot) return;
       const controller = await module.createWhaleAnimation(el.canvas, {
         onAction: value => { action = value; paint(); },
-        onError: () => mascotFailed(),
+        onError: () => { if (generation === mascotGeneration && !useVideo()) mascotFailed(); },
       });
-      if (!expanded || mascot) {
+      if (!expanded || useVideo() || generation !== mascotGeneration || mascot) {
         if (controller) controller.dispose();
         return;
       }
@@ -264,7 +268,9 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
       el.fallbackImg.hidden = true;
       mascot.setBusy(Date.now() < busyUntil);
     } catch (error) {
-      mascotFailed();
+      if (generation === mascotGeneration && !useVideo()) mascotFailed();
+    } finally {
+      if (generation === mascotGeneration) mascotLoading = false;
     }
   }
 
@@ -273,7 +279,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     mascot = null;
     el.canvas.hidden = true;
     el.fallbackImg.hidden = false;
-    if (!expanded) return;
+    if (!expanded || useVideo()) return;
     if (mascotTries >= 5) return;
     mascotTries += 1;
     const stale = el.canvas;
@@ -281,16 +287,24 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     fresh.removeAttribute('data-action');
     stale.replaceWith(fresh);
     el.canvas = fresh;
-    setTimeout(() => { if (expanded && !mascot) ensureMascot(); }, 400 * mascotTries);
+    setTimeout(() => { if (expanded && !useVideo() && !mascot) ensureMascot(); }, 400 * mascotTries);
   }
 
   function disposeMascot() {
+    mascotGeneration += 1;
+    mascotLoading = false;
     if (mascot) {
       mascot.dispose();
       mascot = null;
     }
     mascotTries = 0;
-    el.canvas.hidden = false;
+    // dispose() 主动释放 WebGL 上下文，下一次必须使用新画布。
+    const fresh = el.canvas.cloneNode(false);
+    fresh.removeAttribute('data-animation');
+    fresh.removeAttribute('data-action');
+    el.canvas.replaceWith(fresh);
+    el.canvas = fresh;
+    el.canvas.hidden = useVideo();
     el.fallbackImg.hidden = true;
   }
 
@@ -331,6 +345,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   }
 
   function applyCharacter() {
+    videoBroken = false;
     syncCharacterVisibility();
     if (expanded) startCharacter();
     else stopVideos();
@@ -379,7 +394,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
         videoTimer = setTimeout(() => {
           if (previous && previous !== next && previous.dataset.on !== 'true') previous.pause();
         }, 500);
-      }).catch(() => videoFailed());
+      }).catch(() => { if (sceneAttempt === myAttempt) videoFailed(); });
     };
     // 迟迟播不起来也要有结果，不能留一块空白
     videoGuard = setTimeout(() => {
@@ -397,7 +412,8 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   function videoFailed() {
     videoBroken = true;
     stopVideos();
-    applyCharacter();
+    syncCharacterVisibility();
+    startCharacter();
   }
 
   /* -------------------------------------------------------------- 事件 */

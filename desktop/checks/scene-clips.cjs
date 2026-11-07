@@ -29,7 +29,7 @@ function check(name, ok, detail) {
   }
   check('十场景都在（含彩蛋的 grab）', expected.every(s => scenes.isValidScene(s)));
   check('未知场景不认', !scenes.isValidScene('sleep'));
-  check('彩蛋场景暂用 working.webm 顶替', scenes.sceneFileName('grab', 0) === 'working.webm', scenes.sceneFileName('grab', 0));
+  check('彩蛋场景用新动画 grab.webm', scenes.sceneFileName('grab', 0) === 'grab.webm', scenes.sceneFileName('grab', 0));
   check('彩蛋气泡是 token 来', scenes.sceneBubble('grab', 0) === 'token 来，token 来。', scenes.sceneBubble('grab', 0));
 
   // 2. 每个引用的文件都真的在磁盘上

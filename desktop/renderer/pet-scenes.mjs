@@ -13,8 +13,8 @@ export const SCENE_CLIPS = Object.freeze({
   before: Object.freeze(['before.webm']),
   rest: Object.freeze(['rest.webm', 'gaming.webm']),
   idle: Object.freeze(['idle.webm']),
-  // 彩蛋用：伸手抓抓抓。真素材还没做出来，先拿 working.webm 顶着（汇报里要写明）
-  grab: Object.freeze(['working.webm']),
+  // 彩蛋用：伸手抓抓抓（2026-11-08 由豆包绿幕视频走 chroma_v3 → normalize → encode 转出）
+  grab: Object.freeze(['grab.webm']),
 });
 
 /** 兼容旧调用：场景键 → 第一段文件名。 */
@@ -33,7 +33,7 @@ export const SCENE_LABELS = Object.freeze({
   before: '晨间刷牙',
   rest: '悠闲哼歌 / 玩游戏气急败坏',
   idle: '待机呼吸休闲',
-  grab: '伸手抓抓抓（彩蛋，暂用大口吃零食顶替）',
+  grab: '伸手抓抓抓（彩蛋）',
 });
 
 /** 气泡文案按场景走，一段片段一条，顺序和 SCENE_CLIPS 对齐。 */

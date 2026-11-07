@@ -36,6 +36,31 @@ use tauri::{
 const WIN_W: f64 = 440.0;
 const WIN_COLLAPSED_H: f64 = 390.0;
 const WIN_EXPANDED_H: f64 = 500.0;
+/* 设置页：内容（量过）555 高 + 顶部 45 的标题栏 + 6 余量；设成固定值比原来 820 少一整块空白 */
+const WIN_SETTINGS_H: f64 = 606.0;
+
+/// 整台电脑的键鼠空闲了多少毫秒。彩蛋判据和休息日「打游戏」那段的取舍都靠它。
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn user_idle_ms() -> u64 {
+    use windows_sys::Win32::System::SystemInformation::GetTickCount64;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    unsafe {
+        let mut info = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
+        if GetLastInputInfo(&mut info) == 0 {
+            return 0; // 拿不到就当作「刚刚动过」，宁少播打游戏
+        }
+        GetTickCount64()
+            .saturating_sub(info.dwTime as u64)
+            .min(86_400_000)
+    }
+}
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn user_idle_ms() -> u64 { 0 }
 
 /* ------------------------------------------------------------------ 配置 */
 
@@ -236,6 +261,8 @@ struct StatePayload {
     prices: PriceInfo,
     sessions: usize,
     updated: i64,
+    /* DS Bot 最近一次写会话日志的时间：两分钟内写过就算它还在跑，休息日不播打游戏 */
+    last_write: i64,
 }
 
 /// 挂件每 3 秒拉一次：参数 + 今日偷吃（自己扫 DS Bot 的会话日志算出来）。
@@ -253,6 +280,7 @@ fn get_state(app: AppHandle) -> StatePayload {
         },
         sessions: report.sessions,
         updated: ledger::now_ms(),
+        last_write: report.last_write_ms,
     }
 }
 
@@ -270,6 +298,7 @@ fn recompute_today(app: AppHandle) -> StatePayload {
         },
         sessions: report.sessions,
         updated: ledger::now_ms(),
+        last_write: report.last_write_ms,
     }
 }
 
@@ -402,7 +431,7 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
             .flatten()
             .map(|monitor| monitor.size().height as f64 / scale)
             .unwrap_or(820.0);
-        let height = 820.0_f64.min(monitor_height - 40.0).max(520.0);
+        let height = WIN_SETTINGS_H.min(monitor_height - 40.0).max(520.0);
         let _ = window.set_size(tauri::LogicalSize::new(466.0, height));
     } else {
         let expanded = load_config(&app).expanded;
@@ -583,7 +612,8 @@ pub fn run() {
             open_menu,
             set_dragging,
             start_pet_drag,
-            set_hit_regions
+            set_hit_regions,
+            user_idle_ms
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());

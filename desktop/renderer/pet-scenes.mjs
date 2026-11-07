@@ -13,6 +13,8 @@ export const SCENE_CLIPS = Object.freeze({
   before: Object.freeze(['before.webm']),
   rest: Object.freeze(['rest.webm', 'gaming.webm']),
   idle: Object.freeze(['idle.webm']),
+  // 彩蛋用：伸手抓抓抓。真素材还没做出来，先拿 working.webm 顶着（汇报里要写明）
+  grab: Object.freeze(['working.webm']),
 });
 
 /** 兼容旧调用：场景键 → 第一段文件名。 */
@@ -31,6 +33,7 @@ export const SCENE_LABELS = Object.freeze({
   before: '晨间刷牙',
   rest: '悠闲哼歌 / 玩游戏气急败坏',
   idle: '待机呼吸休闲',
+  grab: '伸手抓抓抓（彩蛋，暂用大口吃零食顶替）',
 });
 
 /** 气泡文案按场景走，一段片段一条，顺序和 SCENE_CLIPS 对齐。 */
@@ -44,6 +47,7 @@ export const SCENE_BUBBLES = Object.freeze({
   rest: Object.freeze(['今天休息，哼首歌。', '开黑，输赢不论。']),
   idle: Object.freeze(['抱着饭碗发会儿呆。']),
   overtime: Object.freeze(['班是加不完的，饭得吃。']),
+  grab: Object.freeze(['token 来，token 来。']),
 });
 
 /** 工资状态里属于「今天没在上班」的几种，忙起来时算加班。 */
@@ -61,6 +65,7 @@ export const SCENE_ORDER = Object.freeze([
   'rest',
   'overtime',
   'idle',
+  'grab',
 ]);
 
 /** 把任意整数折进 [0, size) 的区间，负数也能用。 */
@@ -92,14 +97,29 @@ export function sceneBubble(scene, turn = 0) {
 }
 
 /**
- * 按优先级挑场景：caught > overtime > busy > 工资状态 > idle。
- * @param {{phase?: string, busy?: boolean, caught?: boolean}} state
+ * 按优先级挑场景：彩蛋 > caught > overtime > busy > 工资状态 > idle。
+ * @param {{phase?: string, busy?: boolean, caught?: boolean, egg?: boolean}} state
  *   phase 来自 core.computeWage 的 phase 字段；
- *   busy 表示模型正在跑或刚产生费用；caught 表示刚点了人物。
+ *   busy 表示模型正在跑或刚产生费用；caught 表示刚点了人物；
+ *   egg 表示彩蛋正在生效（伸手抓抓抓）。
  */
-export function pickScene({ phase, busy = false, caught = false } = {}) {
+export function pickScene({ phase, busy = false, caught = false, egg = false } = {}) {
+  if (egg) return 'grab';
   if (caught) return 'caught';
   if (busy && OFF_DUTY.has(phase)) return 'overtime';
   if (busy) return 'busy';
   return WAGE_SCENES.has(phase) ? phase : 'idle';
+}
+
+/**
+ * 休息日的第二段是「开黑打游戏」，只在真闲着的时候播。
+ * 模型在跑、用户正在用电脑时，把轮播到的 gaming 换成第一段（哼歌）。
+ * @param {string} scene 场景键
+ * @param {number} turn 轮播到第几段
+ * @param {boolean} allowGaming 允不允许播打游戏
+ */
+export function guardTurn(scene, turn, allowGaming = true) {
+  if (scene !== 'rest' || allowGaming) return turn;
+  const clip = sceneFileName(scene, turn);
+  return clip === 'gaming.webm' ? 0 : turn;
 }

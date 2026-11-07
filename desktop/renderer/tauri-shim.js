@@ -35,6 +35,10 @@
     setMode: function (mode) {
       return invoke('set_mode', { mode: mode });
     },
+    // 整台电脑的键鼠空闲了多久（毫秒）：彩蛋和「打游戏」那段的判据用
+    userIdle: function () {
+      return invoke('user_idle_ms');
+    },
     onOpenSettings: function (cb) {
       listen('open-settings', function () { cb(); });
     },

@@ -440,6 +440,9 @@ pub struct ScanReport {
     pub sessions: usize,
     pub prices: String,
     pub models: usize,
+    /// 今天写过的会话日志里，最近一次的修改时间（毫秒）；没有会话就是 0。
+    /// 挂件用它判断 DS Bot 是不是还在跑（两分钟内写过就算在跑）。
+    pub last_write_ms: i64,
 }
 
 /// 扫今天所有会话日志，返回今日花费。未变化的文件直接复用上次结果。
@@ -453,7 +456,9 @@ pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanRe
     let files = session_files(home, day_start_ms(now).min(now - 3_600_000));
     let mut totals = Totals::default();
     let mut seen = Vec::with_capacity(files.len());
+    let mut last_write_ms = 0i64;
     for (path, modified, len) in files {
+        last_write_ms = last_write_ms.max(modified as i64);
         let reuse = cache
             .entries
             .get(&path)
@@ -480,6 +485,7 @@ pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanRe
         sessions: seen.len(),
         prices: prices.source.clone(),
         models: prices.count(),
+        last_write_ms,
     }
 }
 

@@ -23,12 +23,14 @@ function check(name, ok, detail) {
   const scenes = await import(pathToFileURL(path.join(ROOT, 'renderer', 'pet-scenes.mjs')).href);
 
   // 1. 场景清单没漏
-  const expected = ['caught', 'overtime', 'busy', 'working', 'lunch', 'off', 'before', 'rest', 'idle'];
+  const expected = ['caught', 'overtime', 'busy', 'working', 'lunch', 'off', 'before', 'rest', 'idle', 'grab'];
   for (const scene of expected) {
     check(`场景 ${scene} 有片段`, scenes.clipCount(scene) > 0, `clipCount=${scenes.clipCount(scene)}`);
   }
-  check('一共九个场景', expected.every(s => scenes.isValidScene(s)));
+  check('十场景都在（含彩蛋的 grab）', expected.every(s => scenes.isValidScene(s)));
   check('未知场景不认', !scenes.isValidScene('sleep'));
+  check('彩蛋场景暂用 working.webm 顶替', scenes.sceneFileName('grab', 0) === 'working.webm', scenes.sceneFileName('grab', 0));
+  check('彩蛋气泡是 token 来', scenes.sceneBubble('grab', 0) === 'token 来，token 来。', scenes.sceneBubble('grab', 0));
 
   // 2. 每个引用的文件都真的在磁盘上
   for (const [scene, clips] of Object.entries(scenes.SCENE_CLIPS)) {
@@ -62,16 +64,23 @@ function check(name, ok, detail) {
   check('单段场景第 1 段还是自己', scenes.sceneFileName('idle', 1) === 'idle.webm', scenes.sceneFileName('idle', 1));
   check('无效场景取不到文件', scenes.sceneFileName('nope') === null);
 
-  // 7. 场景挑选用原来的优先级：被抓 > 加班 > 忙碌 > 工资状态
+  // 7. 场景挑选用原来的优先级：彩蛋 > 被抓 > 加班 > 忙碌 > 工资状态
+  check('彩蛋最高优先', scenes.pickScene({ phase: 'working', caught: true, egg: true }) === 'grab');
   check('点人物优先播被抓', scenes.pickScene({ phase: 'working', caught: true }) === 'caught');
   check('休息日忙碌算加班', scenes.pickScene({ phase: 'rest', busy: true }) === 'overtime');
   check('上班忙碌播忙碌', scenes.pickScene({ phase: 'working', busy: true }) === 'busy');
   check('午休不忙播午休', scenes.pickScene({ phase: 'lunch' }) === 'lunch');
   check('未知状态退回待机', scenes.pickScene({ phase: 'weird' }) === 'idle');
 
+  // 8. 休息日打游戏那段：模型在跑 / 用户在动时不播
+  check('闲时第 1 段照播打游戏', scenes.guardTurn('rest', 1, true) === 1);
+  check('忙时第 1 段换成哼歌', scenes.guardTurn('rest', 1, false) === 0);
+  check('忙时第 0 段不受影响', scenes.guardTurn('rest', 0, false) === 0);
+  check('别的场景不受影响', scenes.guardTurn('lunch', 1, false) === 1);
+
   if (failures) {
     console.log(`\nFAILED: ${failures} 项不通过`);
     process.exit(1);
   }
-  console.log('\nPASS: 九场景齐全 / 文件都在 / 午休与休息日各两段轮播 / 气泡对齐 / 优先级不变');
+  console.log('\nPASS: 十场景齐全 / 文件都在 / 午休与休息日各两段轮播 / 气泡对齐 / 优先级不变 / 忙时不播打游戏');
 })();

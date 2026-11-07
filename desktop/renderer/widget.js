@@ -2,8 +2,9 @@
  * 桌面版挂件：外观与 DS Bot 里的 dsh-salary-meter 挂件保持一致，
  * 区别只是账本由 Rust 侧直接扫 DS Bot 的会话日志算出来，不依赖插件。
  */
-import { pickScene, sceneBubble, sceneFileName, clipCount } from './pet-scenes.mjs';
+import { pickScene, sceneBubble, sceneFileName, clipCount, guardTurn } from './pet-scenes.mjs';
 import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
+import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from './egg.mjs';
 
 (function () {
   'use strict';
@@ -109,6 +110,17 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
   let videoGuard = null;
   let videoBroken = false;
   let characterApplied = null;
+
+  /* ------------------------------------------------------------ 彩蛋状态 */
+  // 两个彩蛋共用一个效果：余粮显示成 ¥0.00 停 3 秒，只动显示层，账本一分不碰
+  let eggUntil = 0; // 清零显示到什么时候（performance.now）
+  let eggWasActive = false;
+  let bubbleMutedUntil = 0; // 彩蛋恢复后这段时间别冒气泡
+  let clickTimes = []; // 最近几次点人物的时间，3 秒窗口外的会被丢掉
+  let lastPoke = 0; // 最近一次碰挂件的时间，待机彩蛋靠它算静默多久
+  let idleRollAt = 0; // 待机彩蛋上次掷骰的时间
+  let userIdleMs = Infinity; // 整台电脑的键鼠空闲时长（Rust 侧读系统），拿不到就当在忙
+  let dsLastWrite = 0; // DS Bot 最近一次写会话日志的时间，判断它是不是在跑
 
   /* ------------------------------------------------------------ 小工具 */
 
@@ -443,6 +455,56 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
     animateAmountWidth(before);
   }
 
+  /* ------------------------------------------------------------ 彩蛋 */
+  // 触发后：余粮显示 ¥0.00 停 3 秒、气泡喊「token 来，token 来」、人物换成伸手抓抓抓。
+  // 只改显示层，账本和 lastAmount 照常走，恢复时不弹出任何提示。
+
+  function eggActive() {
+    return performance.now() < eggUntil;
+  }
+
+  function triggerEgg() {
+    const now = performance.now();
+    if (now < eggUntil) return false; // 连着触发不叠加，先等这轮放完
+    eggUntil = now + EGG.showMs;
+    bubbleMutedUntil = 0;
+    lastPoke = now; // 放完彩蛋重新起算「5 分钟没碰」，避免刚结束又掷骰
+    clickTimes = []; // 连点计数清掉，一次彩蛋只算一轮
+    return true;
+  }
+
+  function notePoke() {
+    lastPoke = performance.now();
+  }
+
+  // 整台电脑最近动过键鼠没有。Rust 侧读 GetLastInputInfo，拿不到时退回「挂件被碰过」的判断
+  function userIsActive() {
+    if (userIdleMs !== Infinity) return userIdleMs < 60_000 || performance.now() - lastPoke < 90_000;
+    return performance.now() - lastPoke < 90_000;
+  }
+
+  // DS Bot 在跑：刚产生费用，或最近两分钟还在往会话日志里写
+  function dsBotActive() {
+    return Date.now() < busyUntil || (dsLastWrite > 0 && Date.now() - dsLastWrite < 120_000);
+  }
+
+  // 休息日第二段是「开黑打游戏」，只有真闲着才播
+  function gamingAllowed() {
+    if (userIsActive() || dsBotActive()) return false;
+    return el.settingsLayer.hidden;
+  }
+
+  // 每秒看一眼：设置页开着算在动；静默满 5 分钟之后，每 30 秒掷一次 2%
+  function idleTick() {
+    if (!el.settingsLayer.hidden) { lastPoke = performance.now(); return; }
+    // 收起态看不到人物也看不到气泡，清零只会像故障，所以这个彩蛋只在展开时掷
+    if (!expanded) return;
+    if (eggActive()) return;
+    const res = rollIdleEgg({ lastPoke, now: performance.now(), lastRoll: idleRollAt, rand: Math.random() });
+    idleRollAt = res.lastRoll;
+    if (res.fire) triggerEgg();
+  }
+
   function tickMoney(amount, now) {
     const prev = lastAmount;
     lastAmount = amount;
@@ -486,19 +548,26 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
     el.statusTitle.title = wage.status.replace(/\s/g, '');
     el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 
+    // 彩蛋期间：显示层清零（¥0.00），账本和 lastAmount 照原样走，恢复时不闪不提示
+    const egg = eggActive();
     const negative = amount < 0;
-    const text = (negative ? "−" : "") + money(Math.abs(amount));
-    // 单位放数字后；统计有遗漏时，实际余粮不大于当前估算。
-    el.prefix.textContent = partial ? '≤' : '';
+    const text = egg ? '0.00' : (negative ? "−" : "") + money(Math.abs(amount));
+    // 统计有遗漏时，实际余粮不大于当前估算；彩蛋期间不显示「≤」，免得出现 ≤¥0.00
+    el.prefix.textContent = egg ? '' : partial ? '≤' : '';
     const changed = renderedAmount !== text;
     if (changed) {
-      if (lastAmount !== null) noteChange(amount - lastAmount);
+      if (!egg && lastAmount !== null) noteChange(amount - lastAmount);
       el.value.style.setProperty('--sm-digits', text.length);
       // 涨钱往上滚、扣钱往下滚；首屏没有基准，按涨处理（反正不动画）
-      renderAmount(text, lastAmount === null || amount >= lastAmount ? 1 : -1);
+      renderAmount(text, egg ? -1 : lastAmount === null || amount >= lastAmount ? 1 : -1);
     }
-    // 文本没变也要跑一次：首屏真实数据和默认值一样时，基准还没建
-    if (changed || lastAmount === null) tickMoney(amount, now);
+    if (egg) {
+      // 显示被顶掉了，基准跟着真实金额走，恢复的那一下才不会被当成一次涨跌
+      lastAmount = amount;
+      greenMark = amount;
+    } else if (changed || lastAmount === null) {
+      tickMoney(amount, now);
+    }
 
     el.countdown.innerHTML = wage.countdownSeconds > 0
       ? wage.countdownLabel + ' <b>' + duration(wage.countdownSeconds) + '</b>'
@@ -508,23 +577,37 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
 
     el.earned.textContent = '¥' + money(wage.earned);
     el.expenseLabel.textContent = partial ? '偷吃估算（有遗漏）' : '肥鱼饭钱（估算）';
-    el.spent.textContent = (partial ? '≥' : '−') + ' ¥' + expenseText();
+    el.spent.textContent = '¥' + (partial ? '≥' : '−') + expenseText();
     el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
     {
       if (useVideo()) {
-        const scene = pickScene({ phase: wage.phase, busy: Date.now() < busyUntil, caught: performance.now() < caughtUntil });
-        const turn = playScene(scene);
+        const scene = pickScene({
+          phase: wage.phase,
+          busy: Date.now() < busyUntil,
+          caught: performance.now() < caughtUntil,
+          egg,
+        });
+        const turn = playScene(scene, gamingAllowed());
         const key = scene + '#' + turn;
         if (bubbleKey !== key) {
           bubbleKey = key;
-          bubbleUntil = performance.now() + 4500;
+          // 彩蛋刚恢复时别让气泡紧跟着冒出来，保持安静
+          if (performance.now() >= bubbleMutedUntil) bubbleUntil = performance.now() + 4500;
         }
-        el.bubble.textContent = sceneBubble(scene, turn);
+        el.bubble.textContent = egg ? EGG.bubble : sceneBubble(scene, turn);
+        if (egg) bubbleUntil = Math.max(bubbleUntil, eggUntil);
       } else {
         const pose = performance.now() < caughtUntil ? 'caught' : null;
-        el.bubble.textContent = pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
+        el.bubble.textContent = egg ? EGG.bubble : pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
+        if (egg) bubbleUntil = Math.max(bubbleUntil, eggUntil);
       }
+      if (eggWasActive && !egg) {
+        // 恢复的那一下要安静：气泡立刻收起来，别把场景文案顺势冒出来
+        bubbleMutedUntil = performance.now() + 4500;
+        bubbleUntil = 0;
+      }
+      eggWasActive = egg;
     }
 
     el.bubble.hidden = performance.now() >= bubbleUntil;
@@ -640,7 +723,7 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
       disposeMascot();
       sceneCurrent = null;
       sceneName = null; // 重开人物时当作「重新进入场景」，轮到下一段
-      playScene(currentScene());
+      playScene(currentScene(), gamingAllowed());
     } else {
       stopVideos();
       setTimeout(() => { if (!useVideo()) ensureMascot(); }, 260);
@@ -667,22 +750,24 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
 
   // 两块 video 轮流装场景，切换时交叉淡入。
   // 一个场景可以挂多段片段：每次重新进入这个场景就换下一段（返回这次播的是第几段）。
-  function playScene(scene) {
+  // allowGaming=false 时，休息日轮到的「开黑打游戏」会被换成哼歌那一段。
+  function playScene(scene, allowGaming = true) {
     if (!scene || !useVideo()) return 0;
     if (scene !== sceneName) {
       sceneName = scene;
       sceneTurn = sceneTurns[scene] || 0;
       sceneTurns[scene] = (sceneTurn + 1) % Math.max(1, clipCount(scene));
     }
-    const clipKey = scene + '#' + sceneTurn;
-    if (clipKey === sceneCurrent) return sceneTurn;
+    const turn = guardTurn(scene, sceneTurn, allowGaming);
+    const clipKey = scene + '#' + turn;
+    if (clipKey === sceneCurrent) return turn;
     sceneCurrent = clipKey;
     const videos = el.videos;
     const previous = videos[activeVideo];
     const nextIndex = activeVideo === 0 ? 1 : 0;
     const next = videos[nextIndex];
     const myAttempt = ++sceneAttempt;
-    const src = `assets/webm/${sceneFileName(scene, sceneTurn)}`;
+    const src = `assets/webm/${sceneFileName(scene, turn)}`;
     const show = () => {
       next.dataset.on = 'true';
       if (previous) previous.dataset.on = 'false';
@@ -717,7 +802,7 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
     } else {
       play();
     }
-    return sceneTurn;
+    return turn;
   }
 
   function videoFailed() {
@@ -782,8 +867,14 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
   }
 
   el.mascotBtn.addEventListener('click', () => {
-    caughtUntil = performance.now() + 2500;
-    bubbleUntil = performance.now() + 4500;
+    const now = performance.now();
+    notePoke();
+    clickTimes.push(now);
+    clickTimes = clickTimes.filter(t => now - t <= CLICK_EGG.windowMs);
+    // 3 秒里点满 6 下开始算，之后每多点一下都有 15% 的机会
+    if (rollClickEgg(clickTimes.length, Math.random())) triggerEgg();
+    caughtUntil = now + 2500;
+    bubbleUntil = now + 4500;
     if (mascot) mascot.catch();
     paint();
   });
@@ -820,6 +911,11 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
       if (state) {
         cfg = Object.assign({}, DEF, state.config || cfg);
         today = state.today || { expense: 0, known: 0, unknown: 0 };
+        dsLastWrite = Number(state.last_write) || dsLastWrite;
+        // 整台电脑的键鼠空闲时长交给系统数，判断「用户是不是正在用电脑」
+        if (api.userIdle) {
+          api.userIdle().then(ms => { userIdleMs = Number(ms) || 0; }).catch(() => {});
+        }
         if (!basisReady) {
           // 首屏 paint 用的是默认配置，等真实数据到了再重建基准，否则会被当成一次涨跌
           basisReady = true;
@@ -847,6 +943,14 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
   applyTheme();
   applyExpanded();
   paint();
+
+  // 碰过挂件就记一笔：待机彩蛋要的是真没人理它
+  lastPoke = performance.now();
+  for (const type of ['pointerdown', 'keydown', 'wheel', 'contextmenu']) {
+    document.addEventListener(type, notePoke, { capture: true, passive: true });
+  }
+  setInterval(idleTick, 1000);
+
   setInterval(paint, 100);
   refresh();
   setInterval(refresh, 3000);

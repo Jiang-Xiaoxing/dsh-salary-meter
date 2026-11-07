@@ -62,12 +62,16 @@
     font-size:11px;
   }
 
-  /* 设置浮层：铺满整个窗口，Windows 这边开第二个 webview 会卡住，所以走同一窗口 */
+  /* 设置浮层：铺满整个窗口，Windows 这边开第二个 webview 会卡住，所以走同一窗口。
+     用户 09:04 选磨砂浮层：半透明 + 背景模糊，能透出后面的人物和壁纸。 */
   .sm-layer{
     position:absolute;inset:0;
     display:flex;flex-direction:column;
-    background:#EDE9DF;
-    border-radius:12px;
+    background:rgba(250,251,253,.84);
+    backdrop-filter:blur(50px) saturate(1.4);
+    -webkit-backdrop-filter:blur(50px) saturate(1.4);
+    border:1px solid rgba(255,255,255,.5);
+    border-radius:14px;
     overflow:hidden;
     z-index:50;
   }
@@ -77,9 +81,9 @@
     flex:none;
     display:flex;align-items:center;justify-content:space-between;
     padding:0 6px 0 12px;
-    background:#F4F0E6;
-    border-bottom:1px solid #D2CBBA;
-    color:#6E6758;
+    background:rgba(255,255,255,.4);
+    border-bottom:1px solid rgba(20,30,45,.09);
+    color:#5b636e;
     font-size:11px;
     letter-spacing:.08em;
     -webkit-app-region:drag;
@@ -89,12 +93,12 @@
     width:24px;height:20px;
     border:0;border-radius:5px;
     background:transparent;
-    color:#6E6758;
+    color:#5b636e;
     font-size:15px;line-height:18px;
     cursor:pointer;
   }
-  .sm-layer-bar button:hover{background:rgba(33,30,25,.08);color:#211E19}
-  .sm-layer iframe{flex:1;width:100%;border:0;background:#EDE9DF}
+  .sm-layer-bar button:hover{background:rgba(20,30,45,.08);color:#1b1f24}
+  .sm-layer iframe{flex:1;width:100%;border:0;background:transparent}
 </style>
 <link rel="stylesheet" href="assets/desktop-pet.css">
 </head>

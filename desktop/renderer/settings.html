@@ -6,22 +6,22 @@
 <title>设置</title>
 <style>
   :root{
-    --paper:#EDE9DF;
-    --paper-deep:#E2DCCE;
-    --shell:#F4F0E6;
-    --ink:#211E19;
-    --ink-2:#6E6758;
-    --ink-3:#9A9282;
-    --rule:#D2CBBA;
-    --amber:#FFBC55;
-    --amber-dim:#C68F3C;
-    --lamp-on:#E1502A;
+    --paper:transparent;
+    --paper-deep:transparent;
+    --shell:rgba(255,255,255,.4);
+    --ink:#1b1f24;
+    --ink-2:#5b636e;
+    --ink-3:#8b929c;
+    --rule:rgba(20,30,45,.12);
+    --amber:#3d6bff;
+    --amber-dim:#2f55cc;
+    --lamp-on:#d94a4a;
   }
 
   *{box-sizing:border-box;margin:0;padding:0}
 
   body{
-    background:radial-gradient(120% 90% at 50% -10%, #F5F2E9 0%, var(--paper) 45%, var(--paper-deep) 100%);
+    background:transparent;
     color:var(--ink);
     font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
     font-size:13px;
@@ -39,16 +39,16 @@
   }
 
   .head h1{
-    font-family:"Songti SC","STSong","SimSun","Noto Serif SC",serif;
-    font-size:20px;
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    font-size:19px;
     font-weight:600;
-    letter-spacing:.22em;
-    text-indent:.22em;
+    letter-spacing:.14em;
+    text-indent:.14em;
     line-height:1;
   }
 
   .head span{
-    font-family:"Songti SC","STSong","SimSun",serif;
+    font-family:inherit;
     font-size:12px;
     color:var(--ink-2);
     letter-spacing:.06em;
@@ -65,18 +65,18 @@
     font-size:14px;
     font-variant-numeric:tabular-nums;
     color:var(--ink);
-    background:#FCFAF3;
+    background:rgba(255,255,255,.62);
     border:1px solid var(--rule);
     border-radius:7px;
     padding:7px 10px;
-    box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
+    box-shadow:none;
     transition:border-color .15s ease, box-shadow .15s ease;
   }
 
   input:focus{
     outline:none;
-    border-color:var(--ink-2);
-    box-shadow:0 0 0 3px rgba(33,30,25,.08);
+    border-color:rgba(61,107,255,.6);
+    box-shadow:0 0 0 3px rgba(61,107,255,.14);
   }
 
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -96,7 +96,7 @@
     border:1px solid var(--rule);
     border-radius:7px;
     overflow:hidden;
-    background:#FCFAF3;
+    background:rgba(255,255,255,.5);
   }
   .seg button{
     font:inherit;
@@ -109,9 +109,9 @@
     transition:background .15s ease, color .15s ease;
   }
   .seg button + button{border-left:1px solid var(--rule)}
-  .seg button:hover{background:rgba(33,30,25,.05)}
-  .seg button.on{background:#211E19;color:#F4F0E6}
-  .seg button.on:hover{background:#211E19}
+  .seg button:hover{background:rgba(20,30,45,.06)}
+  .seg button.on{background:rgba(27,31,36,.86);color:#fff}
+  .seg button.on:hover{background:rgba(27,31,36,.86)}
   .seg.two{grid-template-columns:1fr 1fr}
   .seg.three{grid-template-columns:1fr 1fr 1fr}
 
@@ -140,7 +140,7 @@
     white-space:nowrap;
   }
   .stat span{font-size:11px;color:var(--ink-2)}
-  .stat.hi b{color:#9A5B12}
+  .stat.hi b{color:#2f55cc}
 
   .foot{
     margin-top:8px;
@@ -166,13 +166,13 @@
     font:inherit;font-size:12px;
     padding:6px 12px;
     color:var(--ink);
-    background:#FCFAF3;
+    background:rgba(255,255,255,.6);
     border:1px solid var(--rule);
     border-radius:7px;
     cursor:pointer;
     transition:background .15s ease,border-color .15s ease;
   }
-  #recompute:hover{background:#F4EFE2;border-color:var(--ink-3)}
+  #recompute:hover{background:rgba(255,255,255,.85);border-color:var(--ink-3)}
   #recompute:disabled{opacity:.5;cursor:default}
 </style>
 </head>

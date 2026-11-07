@@ -65,6 +65,7 @@ struct SavedPos {
 struct AppState {
     passthrough: AtomicBool,
     settings_open: AtomicBool,
+    dragging: AtomicBool,
     cache: Mutex<ledger::ScanCache>,
     prices: ledger::Prices,
 }
@@ -428,6 +429,15 @@ fn sync_menu(app: &AppHandle, cfg: &Config) {
     let _ = handles.pass.set_checked(pass);
 }
 
+/// 前端开始拖窗口时通知一声，拖动期间别去切穿透——窗口位置更新有延迟，
+/// 40ms 的轮询会把鼠标瞬间算到窗口外，一切换拖动就断了、窗口弹回去。
+#[tauri::command]
+fn set_dragging(app: AppHandle, dragging: bool) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.dragging.store(dragging, Ordering::Relaxed);
+    }
+}
+
 fn apply_passthrough(app: &AppHandle, on: bool) {
     if let Some(state) = app.try_state::<AppState>() {
         state.passthrough.store(on, Ordering::Relaxed);
@@ -455,6 +465,13 @@ fn start_click_through(app: AppHandle) {
             };
             // 托盘里手动开了「鼠标穿透」，或者设置页铺满整个窗口，都不归这里管
             if state.passthrough.load(Ordering::Relaxed) {
+                continue;
+            }
+            if state.dragging.load(Ordering::Relaxed) {
+                if ignoring {
+                    ignoring = false;
+                    let _ = win.set_ignore_cursor_events(false);
+                }
                 continue;
             }
             if state.settings_open.load(Ordering::Relaxed) {
@@ -502,6 +519,7 @@ pub fn run() {
         .manage(AppState {
             passthrough: AtomicBool::new(false),
             settings_open: AtomicBool::new(false),
+            dragging: AtomicBool::new(false),
             cache: Mutex::new(ledger::ScanCache::default()),
             prices: ledger::load_prices(
                 Some(plugin_data_dir().join("prices-cache.json").as_path()),
@@ -509,13 +527,13 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
-            set_config,
-            get_state,
+            set_config,get_state,
             recompute_today,
             set_expanded,
             set_mode,
             open_settings,
-            open_menu
+            open_menu,
+            set_dragging
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());

@@ -80,8 +80,12 @@
         sx = null;
         sy = null;
         try {
-          // Tauri 2 的全局 API 里叫 getCurrentWindow，不是 getCurrent
+          // 告诉 Rust 侧「正在拖」，别在这期间切穿透，否则拖动会被打断、窗口弹回去
+          window.__TAURI__.core.invoke('set_dragging', { dragging: true });
           window.__TAURI__.window.getCurrentWindow().startDragging();
+          setTimeout(function () {
+            try { window.__TAURI__.core.invoke('set_dragging', { dragging: false }); } catch (err) {}
+          }, 1500);
         } catch (err) { /* 老版本没有这个接口就退回不能拖，不影响点击 */ }
       });
       window.addEventListener('mouseup', function () {
@@ -93,5 +97,10 @@
 
     draggable(document.querySelector('.sm-mascot'));
     // 账目条不再加拖动：它的点击是展开/收起，手一抖就被当成拖窗口，按钮就点不动了
+
+    // 松手就解除「正在拖」，比等 1.5 秒超时更快
+    window.addEventListener('mouseup', function () {
+      try { window.__TAURI__.core.invoke('set_dragging', { dragging: false }); } catch (err) {}
+    });
   });
 })();

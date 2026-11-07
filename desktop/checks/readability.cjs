@@ -17,7 +17,7 @@ await run("document.querySelector('#toggleBtn').click()");await sleep(250);asser
 fs.writeFileSync(out+'/expanded.png',(await w.webContents.capturePage()).toPNG());
 await run("document.querySelector('#toggleBtn').click()");await sleep(250);assert.equal(await run("document.querySelector('#widget').dataset.expanded"),'false');
 for(const value of ['0.00','−21.25','−1,234,567.89']){
-await run(`document.querySelector('#balanceValue').textContent='${value}';document.querySelector('#balanceValue').style.setProperty('--sm-digits',${value.length});document.querySelector('#balancePrefix').textContent='≤'`);
+await run(`document.querySelector('#balanceValue').textContent='${value}';document.querySelector('#balanceMoney').style.setProperty('--sm-digits',${value.length});document.querySelector('#balancePrefix').textContent='≤'`);
 const fits=await run("(()=>{const r=document.querySelector('#balanceRow');return r.scrollWidth<=424&&r.getBoundingClientRect().left>=0})()");assert(fits,value);
 }
 console.log('PASS: bundled font, themes, currency, large amounts, expand/collapse');app.exit(0);

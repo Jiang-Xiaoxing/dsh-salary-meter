@@ -430,7 +430,7 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
             .ok()
             .flatten()
             .map(|monitor| monitor.size().height as f64 / scale)
-            .unwrap_or(820.0);
+            .unwrap_or(WIN_SETTINGS_H);
         let height = WIN_SETTINGS_H.min(monitor_height - 40.0).max(520.0);
         let _ = window.set_size(tauri::LogicalSize::new(466.0, height));
     } else {

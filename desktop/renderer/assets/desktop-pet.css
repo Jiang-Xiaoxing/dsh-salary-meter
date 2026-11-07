@@ -42,14 +42,17 @@
 [data-salary-meter] .sm-food-label{font-size:15px;font-weight:400;margin:0;color:inherit;letter-spacing:0}
 [data-salary-meter] .sm-money {
   display:inline-flex;align-items:baseline;gap:1px;
-  font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;
+  /* 数字那一档的字号收在这里：位数越多越小，16–26px。
+     ¥ 和「≤」按 0.72 倍跟着一起缩放，别再写死像素（用户 23:05 指出 ¥ 偏小）。 */
+  --sm-money-size:clamp(16px,calc(240px / var(--sm-digits,6)),26px);
+  font-size:var(--sm-money-size);font-weight:600;font-variant-numeric:tabular-nums;
   color:inherit;text-shadow:inherit;
   transition:color .2s ease;
 }
-[data-salary-meter] #balancePrefix{font-size:15px;font-weight:400;color:inherit;opacity:1}
+[data-salary-meter] #balancePrefix{font-size:calc(var(--sm-money-size) * 0.72);font-weight:500;color:inherit;opacity:1;margin-right:3px}
 [data-salary-meter] #balancePrefix:empty{display:none}
-[data-salary-meter] #balanceCurrency{font-size:15px;font-weight:400;color:inherit;margin-right:3px}
-[data-salary-meter] #balanceValue{display:inline-block;font-size:clamp(16px,calc(240px / var(--sm-digits,6)),26px);letter-spacing:-.4px;line-height:1;white-space:nowrap;transition:width .2s ease}
+[data-salary-meter] #balanceCurrency{font-size:calc(var(--sm-money-size) * 0.72);font-weight:500;color:inherit;margin-right:3px}
+[data-salary-meter] #balanceValue{display:inline-block;font-size:var(--sm-money-size);letter-spacing:-.4px;line-height:1;white-space:nowrap;transition:width .2s ease}
 /* 机械计数器：每一位数字是一条竖向滚轮（0-9 排三份，靠 transform 转动）。
    只有变化的位会在自己的窗口里滚过去；负号、小数点、逗号、前面的 ¥ 不动。 */
 [data-salary-meter] #balanceValue .sm-slot{position:relative;display:inline-block;text-align:center;vertical-align:baseline;line-height:1;transition:opacity .18s ease}

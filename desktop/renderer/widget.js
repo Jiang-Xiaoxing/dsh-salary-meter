@@ -33,6 +33,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     clock: pick('clockText'),
     balance: pick('balanceRow'),
     arrow: pick('balanceArrow'),
+    money: pick('balanceMoney'),
     prefix: pick('balancePrefix'),
     value: pick('balanceValue'),
     toggle: pick('toggleBtn'),
@@ -557,7 +558,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const changed = renderedAmount !== text;
     if (changed) {
       if (!egg && lastAmount !== null) noteChange(amount - lastAmount);
-      el.value.style.setProperty('--sm-digits', text.length);
+      // 字号档位挂在 .sm-money 上：¥ 和数字都读这个变量，比例才跟着位数一起变
+      el.money.style.setProperty('--sm-digits', text.length);
       // 涨钱往上滚、扣钱往下滚；首屏没有基准，按涨处理（反正不动画）
       renderAmount(text, egg ? -1 : lastAmount === null || amount >= lastAmount ? 1 : -1);
     }

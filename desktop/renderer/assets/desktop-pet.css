@@ -28,6 +28,15 @@
   display:flex;align-items:flex-end;justify-content:center;gap:8px;
   padding:0 0 11px;background:none;border:0;border-radius:0;box-shadow:none;
   font-size:21px;line-height:1;letter-spacing:0;cursor:pointer;-webkit-app-region:no-drag;
+  /* 余粮这行没有底板，裸字浮在人物脚下。浅色主题是深色字，碰上深色背景就糊，
+     所以套一圈同亮度描边把字托起来（用户 13:16 选「加描边」）。
+     子元素（余粮/≈¥/数字/休息日/箭头）都继承这层，不用逐个写。 */
+  text-shadow:0 0 2px rgba(255,255,255,.95),0 0 8px rgba(255,255,255,.8),0 1px 0 rgba(255,255,255,.9);
+}
+/* 深色/金色主题本来就是浅色字，描边翻成黑色，压在浅色网页上也清楚 */
+[data-salary-meter][data-theme='dark'] .sm-balance,
+[data-salary-meter][data-theme='gold'] .sm-balance {
+  text-shadow:0 0 2px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.8),0 1px 0 rgba(0,0,0,.9);
 }
 [data-salary-meter] .sm-balance::after {
   content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:214px;height:1px;pointer-events:none;
@@ -38,7 +47,7 @@
 [data-salary-meter] .sm-money {
   display:inline-flex;align-items:baseline;gap:1px;
   font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;
-  color:var(--sm-text);text-shadow:0 0 6px rgba(255,255,255,.55);
+  color:var(--sm-text);text-shadow:inherit;
   transition:color .2s ease;
 }
 [data-salary-meter] #balancePrefix{font-size:13px;font-weight:500;opacity:.8}

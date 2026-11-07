@@ -276,7 +276,7 @@ export async function apply(ctx) {
         config: saved.config, revision: saved.revision, view,
         today: ledger.days[chinaDay(Date.now())] ?? { expense: 0, known: 0, unknown: 0 },
         active: active.size, lastExpenseAt: ledger.lastExpenseAt,
-        error: writeError, priceDate: '2026-11-03', prices: priceState,
+        error: writeError, priceDate: '2026-11-06', prices: priceState,
       }, { headers: { 'Cache-Control': 'no-store' } });
     },
   });

@@ -18,15 +18,15 @@
     cursor:default;
   }
 
-  /* 窗口 = 胶囊 + 四周 10px 透明边，给投影留位置；样式与 DS Bot 里的挂件一致 */
+  /* 窗口跟内容一样大，不留透明边，免得挡住底下窗口的点击 */
   [data-salary-meter]{
     position:absolute;
-    left: calc(50% - 218px); top: 10px; right: auto; bottom: auto;
-    width: 248px; height: 88px;
+    left: 0; top: 0; right: auto; bottom: auto;
+    width: 440px; height: 390px;
     -webkit-app-region:drag;
     transition:height .18s ease;
   }
-  [data-salary-meter][data-expanded='true']{height:228px}
+  [data-salary-meter][data-expanded='true']{height:500px}
   [data-salary-meter] .sm-mascot:not(.sm-video-mode){left:calc(50% - 56px)}
 
   /* 收起时和插件一样：只留顶部信息、余额和下班倒计时 */

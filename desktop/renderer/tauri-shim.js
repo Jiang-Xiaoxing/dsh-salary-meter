@@ -92,6 +92,6 @@
     }
 
     draggable(document.querySelector('.sm-mascot'));
-    draggable(document.getElementById('balanceRow'));
+    // 账目条不再加拖动：它的点击是展开/收起，手一抖就被当成拖窗口，按钮就点不动了
   });
 })();

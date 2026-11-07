@@ -12,10 +12,10 @@ use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, WindowEvent,
 };
 
-/* 胶囊外观：和 DS Bot 里的插件挂件同尺寸，四周留 10px 透明边给投影 */
-const WIN_W: f64 = 460.0;
-const WIN_COLLAPSED_H: f64 = 410.0;
-const WIN_EXPANDED_H: f64 = 520.0;
+/* 窗口尺寸跟内容一样大，不留透明边——留了边就会挡住底下窗口的点击 */
+const WIN_W: f64 = 440.0;
+const WIN_COLLAPSED_H: f64 = 390.0;
+const WIN_EXPANDED_H: f64 = 500.0;
 
 /* ------------------------------------------------------------------ 配置 */
 

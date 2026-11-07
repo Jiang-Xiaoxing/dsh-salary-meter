@@ -54,16 +54,18 @@
 @keyframes smRollDown{from{transform:translateY(-58%);opacity:.15}to{transform:translateY(0);opacity:1}}
 [data-salary-meter] #petStatus{font-size:10px;font-weight:400;margin:0 0 3px;color:var(--sm-muted);white-space:nowrap}
 [data-salary-meter] .sm-balance .sm-toggle{margin-left:2px;min-width:16px;align-self:center}
-/* 展开明细也跟着裸：不要白卡片，只用细线分隔（用户 00:28 选 A 方案） */
-[data-salary-meter] .sm-top{position:absolute;top:397px;left:85px;width:270px;background:none;border-radius:0;height:27px;text-shadow:0 1px 2px rgba(255,255,255,.92),0 0 9px rgba(255,255,255,.6)}
-[data-salary-meter] .sm-worktime{display:block;top:424px;bottom:auto;left:85px;right:auto;width:270px;height:30px;background:none;padding:0 11px;text-shadow:0 1px 2px rgba(255,255,255,.92),0 0 9px rgba(255,255,255,.6)}
+/* 展开明细：紧贴金额区，垫一层很淡的白底保证压在深色窗口上也读得清（用户 09:32 反馈看不清） */
+[data-salary-meter] .sm-top{position:absolute;top:350px;left:85px;width:270px;background:rgba(255,255,255,.55);border-radius:12px 12px 0 0;height:27px;text-shadow:none;font-size:11px}
+[data-salary-meter] .sm-worktime{display:block;top:377px;bottom:auto;left:85px;right:auto;width:270px;height:30px;background:rgba(255,255,255,.55);padding:0 11px;text-shadow:none;font-size:11px}
 [data-salary-meter] .sm-worktime progress{display:block}
-[data-salary-meter] .sm-ledger{display:flex;top:454px;bottom:auto;left:85px;right:auto;width:270px;height:43px;padding:0 11px;background:none;border-radius:0;border-top:1px solid rgba(116,138,170,.3);text-shadow:0 1px 2px rgba(255,255,255,.92),0 0 9px rgba(255,255,255,.6)}
+[data-salary-meter] .sm-ledger{display:flex;top:407px;bottom:auto;left:85px;right:auto;width:270px;height:43px;padding:0 11px;background:rgba(255,255,255,.55);border-radius:0 0 12px 12px;border-top:1px solid rgba(116,138,170,.22);text-shadow:none;font-size:11px}
+[data-salary-meter] .sm-ledger label{font-size:10px}
+[data-salary-meter] .sm-ledger b{font-size:14px}
 [data-salary-meter][data-expanded='false'] .sm-top,
 [data-salary-meter][data-expanded='false'] .sm-ledger,
 [data-salary-meter][data-expanded='false'] .sm-worktime{display:none}
 [data-salary-meter] .sm-compact-expense{display:none}
-[data-salary-meter] .sm-error{top:385px;bottom:auto;left:85px;right:85px;border-radius:8px;font-size:10px}
+[data-salary-meter] .sm-error{top:452px;bottom:auto;left:85px;right:85px;border-radius:8px;font-size:10px}
 @media(prefers-reduced-motion:reduce){
   .sm-video{transition:none}
   [data-salary-meter] #balanceValue.roll-up,

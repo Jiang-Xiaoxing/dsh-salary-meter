@@ -69,7 +69,7 @@ npm run tauri:build
 
 ## 授权
 
-桌面余额栏使用随应用打包的 Noto Sans CJK SC Regular / Medium 开源字体（SIL OFL 1.1）。字体保持原文件，来源与许可见 [字体说明](renderer/assets/fonts/README.md) 和 [OFL](renderer/assets/fonts/OFL.txt)；发布源码与安装包时保留这些文件，字体许可独立于项目 MIT 许可。
+桌面余额栏使用随应用打包的 Noto Sans CJK SC Regular / Medium 开源字体**子集**（SIL OFL 1.1，只保留界面实际用到的 797 个码点，两个 woff2 共 508,964 字节；原字体 32.9MB 不再打进产物）。原字体放在 `fonts-src/`，改了界面文案用 `tools/subset-fonts.py` 重新裁剪。来源与许可见 [字体说明](renderer/assets/fonts/README.md) 和 [OFL](renderer/assets/fonts/OFL.txt)；发布源码与安装包时保留这些文件，字体许可独立于项目 MIT 许可。子集之外的字符会回退到系统字体，不会出现方块。
 
 代码沿用同作者 [dsh-salary-meter](https://github.com/Jiang-Xiaoxing/dsh-salary-meter) 插件的 MIT 授权。
 

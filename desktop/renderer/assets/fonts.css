@@ -1,4 +1,5 @@
-@font-face {font-family:'Salary Noto Sans SC';src:url('./fonts/NotoSansCJKsc-Regular.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap;}
-@font-face {font-family:'Salary Noto Sans SC';src:url('./fonts/NotoSansCJKsc-Medium.otf') format('opentype');font-weight:500 600;font-style:normal;font-display:swap;}
-body,button,input,select,textarea,[data-salary-meter]{font-family:'Salary Noto Sans SC',sans-serif;}
+@font-face {font-family:'Salary Noto Sans SC';src:url('./fonts/NotoSansCJKsc-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap;}
+@font-face {font-family:'Salary Noto Sans SC';src:url('./fonts/NotoSansCJKsc-Medium.woff2') format('woff2');font-weight:500 600;font-style:normal;font-display:swap;}
+/* 子集之外的字符（模型名里少见的字、以后新增文案）回退到系统字体，不出豆腐块 */
+body,button,input,select,textarea,[data-salary-meter]{font-family:'Salary Noto Sans SC',system-ui,-apple-system,'Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif;}
 [data-salary-meter] .sm-ledger b{font-family:inherit}

@@ -28,7 +28,7 @@
   display:flex;align-items:baseline;justify-content:center;gap:10px;
   padding:0 0 11px;background:none;border:0;border-radius:0;box-shadow:none;
   font-size:21px;line-height:1;letter-spacing:0;cursor:pointer;-webkit-app-region:no-drag;
-  font-family:'Salary Noto Sans SC',sans-serif;font-weight:400;color:#f0f2f6;
+  font-family:'Salary Noto Sans SC',system-ui,-apple-system,'Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif;font-weight:400;color:#f0f2f6;
   white-space:nowrap;
   text-shadow:0 1px 1px #0008;
 }

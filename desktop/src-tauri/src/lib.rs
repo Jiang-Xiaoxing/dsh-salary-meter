@@ -64,6 +64,7 @@ struct SavedPos {
 
 struct AppState {
     passthrough: AtomicBool,
+    settings_open: AtomicBool,
     cache: Mutex<ledger::ScanCache>,
     prices: ledger::Prices,
 }
@@ -355,6 +356,11 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
     let Some(window) = app.get_webview_window("main") else {
         return false;
     };
+    if let Some(state) = app.try_state::<AppState>() {
+        state
+            .settings_open
+            .store(mode == "settings", Ordering::Relaxed);
+    }
     if mode == "settings" {
         // 设置页比屏幕还高就按屏幕压一下，标题栏和关闭按钮得一直看得见
         let scale = window.scale_factor().unwrap_or(1.0);
@@ -434,6 +440,50 @@ fn apply_passthrough(app: &AppHandle, on: bool) {
     sync_menu(app, &cfg);
 }
 
+/// 透明的地方让鼠标穿过去，只让人物身体 / 金额 / 明细接住点击。
+/// 不做的话，窗口矩形里那圈看不见的空气会把底下窗口的按钮全挡住。
+fn start_click_through(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut ignoring = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            let Some(win) = app.get_webview_window("main") else {
+                continue;
+            };
+            let Some(state) = app.try_state::<AppState>() else {
+                continue;
+            };
+            // 托盘里手动开了「鼠标穿透」，或者设置页铺满整个窗口，都不归这里管
+            if state.passthrough.load(Ordering::Relaxed) {
+                continue;
+            }
+            if state.settings_open.load(Ordering::Relaxed) {
+                if ignoring {
+                    ignoring = false;
+                    let _ = win.set_ignore_cursor_events(false);
+                }
+                continue;
+            }
+            let Ok(cursor) = app.cursor_position() else {
+                continue;
+            };
+            let Ok(pos) = win.outer_position() else {
+                continue;
+            };
+            let scale = win.scale_factor().unwrap_or(1.0);
+            let lx = (cursor.x - pos.x as f64) / scale;
+            let ly = (cursor.y - pos.y as f64) / scale;
+            // 可交互区：人物身体居中约 300px 宽，加金额和明细，左右各留一圈空气
+            let inside = (66.0..=374.0).contains(&lx) && (0.0..=500.0).contains(&ly);
+            let want = !inside;
+            if want != ignoring {
+                ignoring = want;
+                let _ = win.set_ignore_cursor_events(ignoring);
+            }
+        }
+    });
+}
+
 /* ----------------------------------------------------------------- 启动 */
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -441,6 +491,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
             passthrough: AtomicBool::new(false),
+            settings_open: AtomicBool::new(false),
             cache: Mutex::new(ledger::ScanCache::default()),
             prices: ledger::load_prices(
                 Some(plugin_data_dir().join("prices-cache.json").as_path()),
@@ -567,6 +618,8 @@ pub fn run() {
             }
 
             apply_window_size(app.handle(), cfg.expanded);
+            // 透明区域穿透：只让人物和账目接住鼠标
+            start_click_through(app.handle().clone());
 
             // 调试用：SALARYMETER_OPEN_SETTINGS=1 时启动直接打开设置窗口，方便截图核对
             if std::env::var("SALARYMETER_OPEN_SETTINGS").ok().as_deref() == Some("1") {

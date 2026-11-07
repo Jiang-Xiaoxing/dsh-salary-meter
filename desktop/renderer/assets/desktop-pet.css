@@ -55,11 +55,12 @@
 @keyframes smRollDown{from{transform:translateY(-58%);opacity:.15}to{transform:translateY(0);opacity:1}}
 [data-salary-meter] #petStatus{font-size:10px;font-weight:400;margin:0 0 3px;color:var(--sm-muted);white-space:nowrap}
 [data-salary-meter] .sm-balance .sm-toggle{margin-left:2px;min-width:16px;align-self:center}
-/* 展开明细：紧贴金额区，垫一层很淡的白底保证压在深色窗口上也读得清（用户 09:32 反馈看不清） */
-[data-salary-meter] .sm-top{position:absolute;top:350px;left:85px;width:270px;background:rgba(255,255,255,.55);border-radius:12px 12px 0 0;height:27px;text-shadow:none;font-size:11px}
-[data-salary-meter] .sm-worktime{display:block;top:377px;bottom:auto;left:85px;right:auto;width:270px;height:30px;background:rgba(255,255,255,.55);padding:0 11px;text-shadow:none;font-size:11px}
+/* 展开明细：三块拼成一张卡，垫一层跟主题同色、96% 不透明的底板。
+   原来 55% 白底，背后的 DSH 窗口文字会透到笔画里，¥0.00 直接发花（大肥鱼 11-07 判定为 bug）。 */
+[data-salary-meter] .sm-top{position:absolute;top:350px;left:85px;width:270px;background:var(--sm-panel,rgba(247,248,250,.96));border-radius:12px 12px 0 0;height:27px;text-shadow:none;font-size:11px}
+[data-salary-meter] .sm-worktime{display:block;top:377px;bottom:auto;left:85px;right:auto;width:270px;height:30px;background:var(--sm-panel,rgba(247,248,250,.96));padding:0 11px;text-shadow:none;font-size:11px}
 [data-salary-meter] .sm-worktime progress{display:block}
-[data-salary-meter] .sm-ledger{display:flex;top:407px;bottom:auto;left:85px;right:auto;width:270px;height:43px;padding:0 11px;background:rgba(255,255,255,.55);border-radius:0 0 12px 12px;border-top:1px solid rgba(116,138,170,.22);text-shadow:none;font-size:11px}
+[data-salary-meter] .sm-ledger{display:flex;top:407px;bottom:auto;left:85px;right:auto;width:270px;height:43px;padding:0 11px;background:var(--sm-panel,rgba(247,248,250,.96));border-radius:0 0 12px 12px;border-top:1px solid rgba(116,138,170,.22);text-shadow:none;font-size:11px}
 [data-salary-meter] .sm-ledger label{font-size:10px}
 [data-salary-meter] .sm-ledger b{font-size:14px}
 [data-salary-meter][data-expanded='false'] .sm-top,

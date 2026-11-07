@@ -9,10 +9,13 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
   const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark', character: 'webm', petScale: 130, expanded: false };
 
+  /* --sm-panel 是账目区（今日账目 / 进度 / 入账）专用底板：
+     跟主题同色，但不透明度 96%，压住背后窗口透上来的文字。
+     人物和余粮大数字不套这层，保持原来的半透明质感。 */
   const PALETTES = {
-    dark: { '--sm-bg': '#232324', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
-    light: { '--sm-bg': '#f7f8fa', '--sm-text': '#1f2329', '--sm-muted': '#6b7280', '--sm-line': '#00000014', '--dsw-specific-bubble': '#dfe7f7', '--sm-blue': '#4c6ef5' },
-    gold: { '--sm-bg': '#1f1a13', '--sm-text': '#d6b36a', '--sm-muted': '#9c8a63', '--sm-line': '#ffffff14', '--dsw-specific-bubble': '#3a2f1d', '--sm-blue': '#c9a227' },
+    dark: { '--sm-bg': '#232324', '--sm-panel': 'rgba(35,35,36,.96)', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
+    light: { '--sm-bg': '#f7f8fa', '--sm-panel': 'rgba(247,248,250,.96)', '--sm-text': '#1f2329', '--sm-muted': '#6b7280', '--sm-line': '#00000014', '--dsw-specific-bubble': '#dfe7f7', '--sm-blue': '#4c6ef5' },
+    gold: { '--sm-bg': '#1f1a13', '--sm-panel': 'rgba(31,26,19,.96)', '--sm-text': '#d6b36a', '--sm-muted': '#9c8a63', '--sm-line': '#ffffff14', '--dsw-specific-bubble': '#3a2f1d', '--sm-blue': '#c9a227' },
   };
 
   const MESSAGES = {

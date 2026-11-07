@@ -75,7 +75,14 @@
         if (e.button !== 0) return;
         // 点在按钮上就别当拖动，交给原来的 click
         var button = e.target.closest && e.target.closest('button');
-        if (button && button !== node) return;
+        if (button && button !== node) {
+          // 上一次拖动如果没收到 mouseup，armed 会残留；这里顺手清掉，
+          // 否则下一次点按钮时鼠标一动就被当成拖动（13:07 实测窗口会被拽走）。
+          armed = false;
+          sx = null;
+          sy = null;
+          return;
+        }
         suppressClick = false;
         sx = e.screenX;
         sy = e.screenY;
@@ -83,6 +90,13 @@
       });
       window.addEventListener('mousemove', function (e) {
         if (!armed || sx === null) return;
+        // 左键没按着就不是拖动。mouseup 丢了（拖动时窗口在动，事件可能收不到）也能兜住。
+        if (!(e.buttons & 1)) {
+          armed = false;
+          sx = null;
+          sy = null;
+          return;
+        }
         // 阈值放宽到 8px，手抖不算拖
         if (Math.abs(e.screenX - sx) < 8 && Math.abs(e.screenY - sy) < 8) return;
         armed = false;

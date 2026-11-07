@@ -6,6 +6,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// 原生窗口拖动会接管鼠标消息，网页不一定收到 mouseup。
+// 按键真实状态决定是否允许恢复穿透，不能用 1.5 秒定时器猜测。
+#[cfg(target_os = "windows")]
+fn left_mouse_down() -> bool {
+    #[link(name = "user32")]
+    extern "system" { fn GetAsyncKeyState(key: i32) -> i16; }
+    unsafe { GetAsyncKeyState(0x01) < 0 }
+}
+#[cfg(not(target_os = "windows"))]
+fn left_mouse_down() -> bool { false }
+
 /// 当前毫秒时间戳，用来给「拖动中」计时
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -331,7 +342,6 @@ fn apply_window_size(app: &AppHandle, expanded: bool) {
         WIN_COLLAPSED_H
     };
     let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
-    clamp_to_monitor(&window);
 }
 
 fn clamp_to_monitor(window: &tauri::WebviewWindow) {
@@ -391,7 +401,7 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
         };
         let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
     }
-    clamp_to_monitor(&window);
+    if mode == "settings" { clamp_to_monitor(&window); }
     true
 }
 
@@ -448,6 +458,27 @@ fn set_dragging(app: AppHandle, dragging: bool) {
     }
 }
 
+// 自己跟随鼠标移动，避免系统拖窗的贴边吸附和 WebView 消息接管。
+#[tauri::command]
+fn start_pet_drag(app: AppHandle) {
+    let Some(win) = app.get_webview_window("main") else { return; };
+    let (Ok(origin), Ok(cursor)) = (win.outer_position(), app.cursor_position()) else { return; };
+    std::thread::spawn(move || {
+        while left_mouse_down() {
+            if let Ok(current) = app.cursor_position() {
+                let _ = win.set_position(PhysicalPosition::new(
+                    origin.x + (current.x - cursor.x).round() as i32,
+                    origin.y + (current.y - cursor.y).round() as i32,
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(8));
+        }
+        if let Some(state) = app.try_state::<AppState>() {
+            state.dragging_until.store(now_ms() + 150, Ordering::Relaxed);
+        }
+    });
+}
+
 fn apply_passthrough(app: &AppHandle, on: bool) {
     if let Some(state) = app.try_state::<AppState>() {
         state.passthrough.store(on, Ordering::Relaxed);
@@ -477,7 +508,7 @@ fn start_click_through(app: AppHandle) {
             if state.passthrough.load(Ordering::Relaxed) {
                 continue;
             }
-            if now_ms() < state.dragging_until.load(Ordering::Relaxed) {
+            if left_mouse_down() || now_ms() < state.dragging_until.load(Ordering::Relaxed) {
                 if ignoring {
                     ignoring = false;
                     let _ = win.set_ignore_cursor_events(false);
@@ -543,7 +574,8 @@ pub fn run() {
             set_mode,
             open_settings,
             open_menu,
-            set_dragging
+            set_dragging,
+            start_pet_drag
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());
@@ -656,6 +688,7 @@ pub fn run() {
             }
 
             apply_window_size(app.handle(), cfg.expanded);
+            if let Some(win) = app.get_webview_window("main") { clamp_to_monitor(&win); }
             // 透明区域穿透：只让人物和账目接住鼠标
             start_click_through(app.handle().clone());
 

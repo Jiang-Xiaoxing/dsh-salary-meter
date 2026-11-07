@@ -60,17 +60,23 @@
 
     /* 人物和账目条占了收起态的大半屏幕，它们必须是拖拽区。
        但直接标成 data-tauri-drag-region 会把点击吞掉（人物点一下是偷吃动画，
-       账目条点一下是展开/收起），所以这里自己判断：按下后挪动超过 4px 才算拖窗口，
+       账目条点一下是展开/收起），所以这里自己判断：按下后挪动超过 8px 才算拖窗口，
        只是轻点就放行给原来的 click。 */
     function draggable(node) {
       if (!node) return;
       var sx = null;
       var sy = null;
       var armed = false;
+      var suppressClick = false;
+      node.addEventListener('click', function (e) {
+        if (suppressClick) { e.preventDefault(); e.stopImmediatePropagation(); suppressClick = false; }
+      }, true);
       node.addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;
         // 点在按钮上就别当拖动，交给原来的 click
-        if (e.target.closest && e.target.closest('button')) return;
+        var button = e.target.closest && e.target.closest('button');
+        if (button && button !== node) return;
+        suppressClick = false;
         sx = e.screenX;
         sy = e.screenY;
         armed = true;
@@ -82,14 +88,13 @@
         armed = false;
         sx = null;
         sy = null;
-        try {
-          // 告诉 Rust 侧「正在拖」，别在这期间切穿透，否则拖动会被打断、窗口弹回去
-          window.__TAURI__.core.invoke('set_dragging', { dragging: true });
-          window.__TAURI__.window.getCurrentWindow().startDragging();
-          setTimeout(function () {
-            try { window.__TAURI__.core.invoke('set_dragging', { dragging: false }); } catch (err) {}
-          }, 1500);
-        } catch (err) { /* 老版本没有这个接口就退回不能拖，不影响点击 */ }
+        suppressClick = true;
+        invoke('set_dragging', { dragging: true })
+          .then(function () { return invoke('start_pet_drag'); })
+          .catch(function (error) {
+            console.error('窗口拖动失败', error);
+            invoke('set_dragging', { dragging: false }).catch(console.error);
+          });
       });
       window.addEventListener('mouseup', function () {
         armed = false;

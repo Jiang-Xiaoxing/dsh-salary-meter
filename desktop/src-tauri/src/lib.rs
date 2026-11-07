@@ -470,11 +470,21 @@ fn start_click_through(app: AppHandle) {
             let Ok(pos) = win.outer_position() else {
                 continue;
             };
+            let Ok(size) = win.outer_size() else {
+                continue;
+            };
             let scale = win.scale_factor().unwrap_or(1.0);
             let lx = (cursor.x - pos.x as f64) / scale;
             let ly = (cursor.y - pos.y as f64) / scale;
-            // 可交互区：人物身体居中约 300px 宽，加金额和明细，左右各留一圈空气
-            let inside = (66.0..=374.0).contains(&lx) && (0.0..=500.0).contains(&ly);
+            // 只让"真看得见的东西"接鼠标：人物身体、金额、展开后的明细。
+            // 窗口高度能区分收起(390)和展开(500)，据此换范围。
+            let expanded = size.height as f64 / scale > 450.0;
+            let (x1, x2, y2) = if expanded {
+                (84.0, 356.0, 452.0)
+            } else {
+                (108.0, 332.0, 342.0)
+            };
+            let inside = (x1..=x2).contains(&lx) && (26.0..=y2).contains(&ly);
             let want = !inside;
             if want != ignoring {
                 ignoring = want;

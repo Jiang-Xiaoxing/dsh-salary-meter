@@ -69,13 +69,16 @@
       var armed = false;
       node.addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;
+        // 点在按钮上就别当拖动，交给原来的 click
+        if (e.target.closest && e.target.closest('button')) return;
         sx = e.screenX;
         sy = e.screenY;
         armed = true;
       });
       window.addEventListener('mousemove', function (e) {
         if (!armed || sx === null) return;
-        if (Math.abs(e.screenX - sx) < 4 && Math.abs(e.screenY - sy) < 4) return;
+        // 阈值放宽到 8px，手抖不算拖
+        if (Math.abs(e.screenX - sx) < 8 && Math.abs(e.screenY - sy) < 8) return;
         armed = false;
         sx = null;
         sy = null;
@@ -96,7 +99,8 @@
     }
 
     draggable(document.querySelector('.sm-mascot'));
-    // 账目条不再加拖动：它的点击是展开/收起，手一抖就被当成拖窗口，按钮就点不动了
+    // 金额区也能拖（用户 12:03 反馈拖这里没反应），但按在按钮上时不拖
+    draggable(document.getElementById('balanceRow'));
 
     // 松手就解除「正在拖」，比等 1.5 秒超时更快
     window.addEventListener('mouseup', function () {

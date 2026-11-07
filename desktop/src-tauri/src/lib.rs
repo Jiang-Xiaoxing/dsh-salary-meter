@@ -2,8 +2,17 @@ mod ledger;
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// 当前毫秒时间戳，用来给「拖动中」计时
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -65,7 +74,7 @@ struct SavedPos {
 struct AppState {
     passthrough: AtomicBool,
     settings_open: AtomicBool,
-    dragging: AtomicBool,
+    dragging_until: AtomicU64,
     cache: Mutex<ledger::ScanCache>,
     prices: ledger::Prices,
 }
@@ -434,7 +443,8 @@ fn sync_menu(app: &AppHandle, cfg: &Config) {
 #[tauri::command]
 fn set_dragging(app: AppHandle, dragging: bool) {
     if let Some(state) = app.try_state::<AppState>() {
-        state.dragging.store(dragging, Ordering::Relaxed);
+        let until = if dragging { now_ms() + 1500 } else { 0 };
+        state.dragging_until.store(until, Ordering::Relaxed);
     }
 }
 
@@ -467,7 +477,7 @@ fn start_click_through(app: AppHandle) {
             if state.passthrough.load(Ordering::Relaxed) {
                 continue;
             }
-            if state.dragging.load(Ordering::Relaxed) {
+            if now_ms() < state.dragging_until.load(Ordering::Relaxed) {
                 if ignoring {
                     ignoring = false;
                     let _ = win.set_ignore_cursor_events(false);
@@ -519,7 +529,7 @@ pub fn run() {
         .manage(AppState {
             passthrough: AtomicBool::new(false),
             settings_open: AtomicBool::new(false),
-            dragging: AtomicBool::new(false),
+            dragging_until: AtomicU64::new(0),
             cache: Mutex::new(ledger::ScanCache::default()),
             prices: ledger::load_prices(
                 Some(plugin_data_dir().join("prices-cache.json").as_path()),
@@ -663,6 +673,12 @@ pub fn run() {
             if let WindowEvent::Moved(pos) = event {
                 if window.label() == "main" {
                     save_position(window.app_handle(), pos.x, pos.y);
+                    // 窗口在动大概率是在拖：把「暂停穿透」的时间往后顺延，慢速长距离拖动也不会被打断
+                    if let Some(state) = window.app_handle().try_state::<AppState>() {
+                        state
+                            .dragging_until
+                            .store(now_ms() + 1200, Ordering::Relaxed);
+                    }
                 }
             }
         })

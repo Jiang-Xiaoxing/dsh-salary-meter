@@ -1,6 +1,6 @@
 /* 已确认的桌宠布局：人物独立，账目按需展开。 */
 [data-salary-meter], [data-salary-meter][data-expanded='true'] {
-  width:440px;height:390px;background:transparent;box-shadow:none;border:0;
+  width:440px;height:390px;max-width:none;background:transparent;box-shadow:none;border:0;
   overflow:visible;--pet-scale:1;
 }
 [data-salary-meter][data-expanded='true'] {height:500px}
@@ -8,7 +8,7 @@
 [data-salary-meter] .sm-mascot.sm-video-mode {
   display:block;left:50%;top:20px;width:440px;height:300px;
   transform:translateX(-50%) scale(var(--pet-scale));transform-origin:center bottom;
-  overflow:hidden;-webkit-app-region:no-drag;
+  overflow:hidden;-webkit-app-region:no-drag;z-index:0;
 }
 [data-salary-meter] .sm-mascot:not(.sm-video-mode) {width:224px;height:224px;top:96px}
 [data-salary-meter] .sm-mascot canvas {width:224px;height:224px}
@@ -24,6 +24,7 @@
    用户 23:14 定：涨钱数字往上滚、变绿、箭头朝上；扣钱往下滚、变红、箭头朝下。 */
 [data-salary-meter] .sm-balance {
   position:absolute;top:300px;left:50%;transform:translateX(-50%);width:auto;min-width:214px;height:auto;
+  z-index:3;
   display:flex;align-items:flex-end;justify-content:center;gap:8px;
   padding:0 0 11px;background:none;border:0;border-radius:0;box-shadow:none;
   font-size:21px;line-height:1;letter-spacing:0;cursor:pointer;-webkit-app-region:no-drag;
@@ -66,6 +67,8 @@
 [data-salary-meter][data-expanded='false'] .sm-worktime{display:none}
 [data-salary-meter] .sm-compact-expense{display:none}
 [data-salary-meter] .sm-error{top:452px;bottom:auto;left:85px;right:85px;border-radius:8px;font-size:10px}
+/* 收起态窗口只有 390 高，错误提示得放回可见范围，不然读不到数据也没人知道 */
+[data-salary-meter][data-expanded='false'] .sm-error{top:345px}
 @media(prefers-reduced-motion:reduce){
   .sm-video{transition:none}
   [data-salary-meter] #balanceValue.roll-up,

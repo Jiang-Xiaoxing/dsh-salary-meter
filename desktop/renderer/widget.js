@@ -121,10 +121,11 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
   /* -------------------------------------------------------------- 算工资 */
   /* 休息制度：double 双休 / single 单休（只休周日）/ alternate 大小周（周六逢双周休）/ none 周末也上班 */
+  /* 大小周的周序号用固定基准连续算，不按自然年重置——按年重置会在每年 1 月出现连续两个周六休息 */
+  const WEEK0 = Date.UTC(2026, 0, 5); // 2026-01-05 是周一，作为第 0 周
   function weekIndex(d) {
-    const first = new Date(d.getFullYear(), 0, 1);
-    const days = Math.floor((d - first) / 86400000);
-    return Math.floor((days + first.getDay()) / 7);
+    const t = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.floor((t - WEEK0) / 604800000);
   }
   function restOn(d) {
     const wd = d.getDay();

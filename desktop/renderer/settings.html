@@ -309,10 +309,11 @@
   var currentRest = 'double';
 
   /* 休息制度：double 双休 / single 单休（只休周日）/ alternate 大小周（周六逢双周休） */
+  /* 大小周周序号用固定基准连续算，跟挂件同一套规则，不按自然年重置 */
+  var WEEK0 = Date.UTC(2026, 0, 5); // 2026-01-05 是周一，作为第 0 周
   function weekIndex(d) {
-    var first = new Date(d.getFullYear(), 0, 1);
-    var days = Math.floor((d - first) / 86400000);
-    return Math.floor((days + first.getDay()) / 7);
+    var t = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.floor((t - WEEK0) / 604800000);
   }
   function restOn(d, mode) {
     var wd = d.getDay();
@@ -322,11 +323,16 @@
     if (mode === 'alternate') return wd === 0 || weekIndex(d) % 2 === 0;
     return true;
   }
-  function setRest(v) {
+  function setRest(v, syncDays) {
     currentRest = (v === 'single' || v === 'alternate' || v === 'none') ? v : 'double';
     var btns = document.querySelectorAll('#segRest button');
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('on', btns[i].getAttribute('data-rest') === currentRest);
+    }
+    // 用户手动切换制度时，把「每月工作日」带成常见值，免得月累计超过月薪
+    if (syncDays) {
+      var preset = { double: 22, single: 26, alternate: 24 };
+      if (preset[currentRest]) el.days.value = preset[currentRest];
     }
   }
 
@@ -454,7 +460,7 @@
   var restBtns = document.querySelectorAll('#segRest button');
   for (var r = 0; r < restBtns.length; r++) {
     restBtns[r].addEventListener('click', function () {
-      setRest(this.getAttribute('data-rest'));
+      setRest(this.getAttribute('data-rest'), true);
       push();
     });
   }

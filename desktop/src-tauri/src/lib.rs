@@ -46,7 +46,8 @@ impl Default for Config {
             end: "18:00".to_string(),
             lunch: 1.0,
             weekend: false,
-            rest_mode: "double".to_string(),
+            // 空字符串 = 还没设置过休息制度，前端会按老配置的 weekend 换算（true→none，false→double）
+            rest_mode: String::new(),
             theme: "dark".to_string(),
             character: "webm".to_string(),
             pet_scale: 130.0,

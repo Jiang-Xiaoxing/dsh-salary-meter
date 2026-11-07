@@ -12,8 +12,8 @@
       {
         "label": "main",
         "title": "计价器",
-        "width": 268,
-        "height": 108,
+        "width": 440,
+        "height": 390,
         "resizable": false,
         "decorations": false,
         "transparent": true,

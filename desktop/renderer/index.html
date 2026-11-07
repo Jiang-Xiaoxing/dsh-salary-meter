@@ -23,7 +23,7 @@
     position:absolute;
     left: 0; top: 0; right: auto; bottom: auto;
     width: 440px; height: 390px;
-    -webkit-app-region:drag;
+    -webkit-app-region:no-drag;
     transition:height .18s ease;
   }
   [data-salary-meter][data-expanded='true']{height:500px}
@@ -76,6 +76,9 @@
     z-index:50;
   }
   .sm-layer[hidden]{display:none}
+  /* An underlying native drag region can steal iframe range/input gestures. */
+  body.settings-open [data-salary-meter]{visibility:hidden;pointer-events:none;-webkit-app-region:no-drag}
+  .sm-layer,.sm-layer iframe{-webkit-app-region:no-drag}
   .sm-layer-bar{
     height:26px;
     flex:none;
@@ -99,8 +102,12 @@
   }
   .sm-layer-bar button:hover{background:rgba(20,30,45,.08);color:#1b1f24}
   .sm-layer iframe{flex:1;width:100%;border:0;background:transparent}
+  .sm-layer-bar{height:44px;padding:6px 16px 0 22px;font-size:18px;letter-spacing:0;border-bottom:0}
+  .settings-save-note{margin-left:auto;margin-right:12px;font-size:10px}
 </style>
 <link rel="stylesheet" href="assets/desktop-pet.css">
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/settings-theme.css">
 </head>
 <body>
 
@@ -112,12 +119,12 @@
   </div>
 
   <div class="sm-balance" id="balanceRow" role="button" tabindex="0" aria-label="查看今日账目" title="当日工资减去已统计的模型花费估算">
-    <small class="sm-food-label" id="balanceLabel">余粮</small>
+    <small class="sm-food-label" id="balanceLabel">鱼粮</small>
     <span class="sm-money">
-      <small id="balancePrefix">≈ ¥</small><span id="balanceValue">0.00</span>
+      <small id="balancePrefix"></small><span id="balanceValue">0.00</span><small id="balanceUnit">元</small>
       <span class="sm-delta" id="balanceArrow" aria-hidden="true"></span>
     </span>
-    <span id="petStatus"></span><button class="sm-toggle" id="toggleBtn" aria-label="展开人物" aria-expanded="false">展开 ⌃</button>
+    <span id="toggleBtn" class="sm-toggle" role="button" tabindex="0" aria-label="展开账目" aria-expanded="false"><span id="petStatus"></span></span>
   </div>
 
   <div class="sm-worktime" id="worktimeRow">
@@ -130,11 +137,11 @@
 
   <div class="sm-ledger" id="ledgerRow">
     <div>
-      <label>今日打工入账</label>
+      <label>今日入账</label>
       <b id="earnedText">¥0.00</b>
     </div>
     <div class="sm-expense">
-      <label id="expenseLabel">今日肥鱼偷吃（估算）</label>
+      <label id="expenseLabel">肥鱼饭钱（估算）</label>
       <b id="spentText">− ¥0.00</b>
     </div>
   </div>
@@ -152,9 +159,9 @@
   <p class="sm-error" id="errorBox" role="alert" hidden></p>
 </section>
 
-<div class="sm-layer" id="settingsLayer" hidden>
+<div class="sm-layer" id="settingsLayer" data-settings-theme="dark" hidden>
   <div class="sm-layer-bar">
-    <span id="settingsDragArea">设置</span>
+    <span id="settingsDragArea">设置</span><small class="settings-save-note">自动保存</small>
     <button id="settingsClose" title="关闭设置" aria-label="关闭设置">×</button>
   </div>
   <iframe id="settingsFrame" title="设置" src="about:blank"></iframe>
@@ -164,3 +171,4 @@
 <script type="module" src="widget.js"></script>
 </body>
 </html>
+

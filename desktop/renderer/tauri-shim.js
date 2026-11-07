@@ -48,8 +48,32 @@
 
   // Tauri 的拖拽区必须逐元素标记，不像 Electron 的 CSS 区域能继承
   window.addEventListener('DOMContentLoaded', function () {
+    // 原生窗口用实际布局分区命中；不把人物到明细之间的空气连成矩形。
+    var lastRegions = '';
+    function reportRegions() {
+      var regions = [];
+      function add(node, pet) {
+        if (!node || node.hidden || getComputedStyle(node).display === 'none') return;
+        var r = node.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        // 动画画布带透明留白，身体居中；大小随 CSS 变换同步。
+        if (pet) {
+          var video = node.classList.contains('sm-video-mode');
+          regions.push({x:r.x+r.width*(video?.32:.12),y:r.y+r.height*(video?.18:.08),width:r.width*(video?.36:.76),height:r.height*(video?.72:.88)});
+        } else regions.push({x:r.x,y:r.y,width:r.width,height:r.height});
+      }
+      add(document.querySelector('.sm-mascot'), true);
+      ['#balanceRow','.sm-top','.sm-worktime','.sm-ledger'].forEach(function(s){add(document.querySelector(s),false);});
+      var next = JSON.stringify(regions);
+      if (next !== lastRegions) {
+        lastRegions = next;
+        invoke('set_hit_regions', {regions:regions}).catch(function(){lastRegions='';});
+      }
+    }
+    reportRegions();
+    setInterval(reportRegions, 100);
     var nodes = document.querySelectorAll(
-      '[data-salary-meter], .sm-top, .sm-top span, .sm-top time, .sm-top b, ' +
+      '.sm-top, .sm-top span, .sm-top time, .sm-top b, ' +
       '.sm-worktime, .sm-worktime span, .sm-worktime b, ' +
       '.sm-ledger, .sm-ledger div, .sm-ledger label, .sm-ledger b, ' +
       '.sm-layer-bar, .sm-layer-bar span'

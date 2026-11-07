@@ -82,7 +82,16 @@ struct SavedPos {
     y: i32,
 }
 
+#[derive(Clone, Deserialize)]
+struct HitRect { x: f64, y: f64, width: f64, height: f64 }
+
+#[tauri::command]
+fn set_hit_regions(state: tauri::State<AppState>, regions: Vec<HitRect>) {
+    *state.hit_regions.lock().unwrap() = regions;
+}
+
 struct AppState {
+    hit_regions: Mutex<Vec<HitRect>>,
     passthrough: AtomicBool,
     settings_open: AtomicBool,
     dragging_until: AtomicU64,
@@ -221,6 +230,7 @@ struct PriceInfo {
 
 #[derive(Serialize)]
 struct StatePayload {
+    tps: Option<f64>,
     config: Config,
     today: ledger::Totals,
     prices: PriceInfo,
@@ -235,6 +245,7 @@ fn get_state(app: AppHandle) -> StatePayload {
     let report = run_scan(&app, false);
     StatePayload {
         config: load_config(&app),
+        tps: report.today.tps(),
         today: report.today,
         prices: PriceInfo {
             source: report.prices,
@@ -251,6 +262,7 @@ fn recompute_today(app: AppHandle) -> StatePayload {
     let report = run_scan(&app, true);
     StatePayload {
         config: load_config(&app),
+        tps: report.today.tps(),
         today: report.today,
         prices: PriceInfo {
             source: report.prices,
@@ -506,9 +518,11 @@ fn start_click_through(app: AppHandle) {
             };
             // 托盘里手动开了「鼠标穿透」，或者设置页铺满整个窗口，都不归这里管
             if state.passthrough.load(Ordering::Relaxed) {
+                ignoring = true;
                 continue;
             }
-            if left_mouse_down() || now_ms() < state.dragging_until.load(Ordering::Relaxed) {
+            // 拖动保护仅在按住且确实开始拖挂件时生效。
+            if left_mouse_down() && now_ms() < state.dragging_until.load(Ordering::Relaxed) {
                 if ignoring {
                     ignoring = false;
                     let _ = win.set_ignore_cursor_events(false);
@@ -522,27 +536,19 @@ fn start_click_through(app: AppHandle) {
                 }
                 continue;
             }
+            // 按在底下窗口时，保持原来的穿透状态，不能抢回后续鼠标事件。
+            if left_mouse_down() { continue; }
             let Ok(cursor) = app.cursor_position() else {
                 continue;
             };
             let Ok(pos) = win.outer_position() else {
                 continue;
             };
-            let Ok(size) = win.outer_size() else {
-                continue;
-            };
             let scale = win.scale_factor().unwrap_or(1.0);
             let lx = (cursor.x - pos.x as f64) / scale;
             let ly = (cursor.y - pos.y as f64) / scale;
-            // 只让"真看得见的东西"接鼠标：人物身体、金额、展开后的明细。
-            // 窗口高度能区分收起(390)和展开(500)，据此换范围。
-            let expanded = size.height as f64 / scale > 450.0;
-            let (x1, x2, y2) = if expanded {
-                (84.0, 356.0, 452.0)
-            } else {
-                (108.0, 332.0, 342.0)
-            };
-            let inside = (x1..=x2).contains(&lx) && (26.0..=y2).contains(&ly);
+            let inside = state.hit_regions.lock().unwrap().iter().any(|r|
+                lx >= r.x && lx <= r.x + r.width && ly >= r.y && ly <= r.y + r.height);
             let want = !inside;
             if want != ignoring {
                 ignoring = want;
@@ -558,6 +564,7 @@ fn start_click_through(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
+            hit_regions: Mutex::new(Vec::new()),
             passthrough: AtomicBool::new(false),
             settings_open: AtomicBool::new(false),
             dragging_until: AtomicU64::new(0),
@@ -575,7 +582,8 @@ pub fn run() {
             open_settings,
             open_menu,
             set_dragging,
-            start_pet_drag
+            start_pet_drag,
+            set_hit_regions
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());

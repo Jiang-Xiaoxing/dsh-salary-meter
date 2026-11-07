@@ -19,11 +19,12 @@
   }
 
   *{box-sizing:border-box;margin:0;padding:0}
+  html,body,input,button,select,textarea{-webkit-app-region:no-drag}
 
   body{
     background:transparent;
     color:var(--ink);
-    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    font-family:'Salary Noto Sans SC',sans-serif;
     font-size:13px;
     padding:16px 24px 14px;
     min-height:100vh;
@@ -39,7 +40,7 @@
   }
 
   .head h1{
-    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    font-family:'Salary Noto Sans SC',sans-serif;
     font-size:19px;
     font-weight:600;
     letter-spacing:.14em;
@@ -61,7 +62,7 @@
 
   input[type=number],input[type=time]{
     width:100%;
-    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-family:'Salary Noto Sans SC',sans-serif;
     font-size:14px;
     font-variant-numeric:tabular-nums;
     color:var(--ink);
@@ -118,7 +119,7 @@
   /* 数据条 */
   .stats{
     display:grid;
-    grid-template-columns:repeat(4, 1fr);
+    grid-template-columns:repeat(3, 1fr);
     border:1px solid var(--rule);
     border-radius:10px;
     background:rgba(255,255,255,.45);
@@ -134,7 +135,7 @@
   .stat:last-child{border-right:none}
 
   .stat b{
-    font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    font-family:'Salary Noto Sans SC',sans-serif;
     font-size:13px;font-weight:500;
     font-variant-numeric:tabular-nums;
     white-space:nowrap;
@@ -175,8 +176,11 @@
   #recompute:hover{background:rgba(255,255,255,.85);border-color:var(--ink-3)}
   #recompute:disabled{opacity:.5;cursor:default}
 </style>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/settings-theme.css">
+<link rel="stylesheet" href="assets/compact-settings.css">
 </head>
-<body>
+<body data-settings-theme="dark">
 
 <div class="head">
   <h1>设置</h1>
@@ -184,88 +188,23 @@
 </div>
 
 <div class="form">
-  <div class="row2">
-    <div class="field">
-      <label for="salary">月薪（税后）</label>
-      <input id="salary" type="number" min="0" step="100" inputmode="decimal">
-    </div>
-    <div class="field">
-      <label for="days">每月工作日</label>
-      <input id="days" type="number" min="1" max="31" step="0.5" inputmode="decimal">
-    </div>
-  </div>
-
-  <div class="row2">
-    <div class="field">
-      <label for="start">上班时间</label>
-      <input id="start" type="time">
-    </div>
-    <div class="field">
-      <label for="end">下班时间</label>
-      <input id="end" type="time">
-    </div>
-  </div>
-
-  <div class="field">
-    <label for="lunch">午休时长（小时）</label>
-    <input id="lunch" type="number" min="0" max="6" step="0.5" inputmode="decimal">
-  </div>
-
-  <div class="field">
-    <label>休息制度</label>
-    <div class="seg three" id="segRest">
-      <button type="button" data-rest="double">双休</button>
-      <button type="button" data-rest="single">单休</button>
-      <button type="button" data-rest="alternate">大小周</button>
-    </div>
-  </div>
-
-  <div class="field">
-    <label>挂件外观</label>
-    <div class="seg" id="seg">
-      <button type="button" data-theme="dark">深色</button>
-      <button type="button" data-theme="light">浅白</button>
-      <button type="button" data-theme="gold">暗金</button>
-    </div>
-  </div>
-
-  <div class="field">
-    <label>人物</label>
-    <div class="seg two" id="segCharacter">
-      <button type="button" data-character="webm">WebM 动画</button>
-      <button type="button" data-character="atlas">旧版图集</button>
-    </div>
-  </div>
-
-  <div class="field">
-    <label for="petScale">人物大小 <output id="petScaleValue">130%</output></label>
-    <input id="petScale" type="range" min="80" max="160" step="5" value="130" style="width:100%;accent-color:#526eff">
-    <button id="resetPetScale" type="button">恢复默认大小</button>
-  </div>
-  <div class="field">
-    <label>自检</label>
-    <p class="checkline" id="checkLine">正在读取…</p>
-    <div class="diagRow">
-      <button type="button" id="recompute">重算今天的账</button>
-      <span class="checkline" id="checkResult"></span>
-    </div>
-  </div>
-
-  <div class="diag" id="diag"></div>
-</div>
-
+<section class="settings-section"><h2>工资与作息</h2>
+<div class="row2"><div class="field"><label for="salary">月薪（税后）</label><input id="salary" type="number" min="0" step="100" inputmode="decimal"></div><div class="field"><label for="days">每月工作日</label><input id="days" type="number" min="1" max="31" step="0.5" inputmode="decimal"></div></div>
+<div class="row2"><div class="field"><label for="start">上班时间</label><input id="start" type="time"></div><div class="field"><label for="end">下班时间</label><input id="end" type="time"></div></div>
+<div class="field setting-line"><label for="lunch">午休（小时）</label><input id="lunch" type="number" min="0" max="6" step="0.5" inputmode="decimal"></div>
+<div class="field setting-line"><label>休息制度</label><div class="seg three" id="segRest"><button type="button" data-rest="double">双休</button><button type="button" data-rest="single">单休</button><button type="button" data-rest="alternate">大小周</button></div></div>
+</section>
+<section class="settings-section"><h2>挂件外观</h2>
+<div class="field setting-line"><label>配色</label><div class="seg" id="seg"><button type="button" data-theme="dark">深色</button><button type="button" data-theme="light">浅白</button><button type="button" data-theme="gold">暗金</button></div></div>
+<div class="field size-line"><label for="petScale">大小 <output id="petScaleValue">130%</output></label><input id="petScale" type="range" min="80" max="160" step="5" value="130"><button id="resetPetScale" type="button">恢复默认</button></div>
+</section><div class="diag" id="diag"></div></div>
 <div class="stats">
-  <div class="stat"><b id="perSec">¥0.000</b><span>每秒</span></div>
-  <div class="stat"><b id="perHour">¥0.00</b><span>每小时</span></div>
-  <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
-  <div class="stat hi"><b id="perMonth">¥0.00</b><span>本月累计（估算）</span></div>
+<div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
+<div class="stat hi"><b id="perMonth">¥0.00</b><span>本月累计（估算）</span></div>
+<div class="stat"><b id="perToken">—</b><span title="最近60分钟合格已完成回答的总输出token ÷ 总流时长（不含空闲时间）">近1小时 token/s</span></div>
 </div>
-
-<div class="foot">
-  <p class="hint">
-    ⋯ 打开设置，× 关闭；退出用托盘菜单。饭钱按已识别 token 估算，单价核对 2026-11-03。
-  </p>
-</div>
+<details class="diagnostics"><summary>账目自检与价格信息</summary><p class="checkline" id="checkLine">正在读取…</p><div class="diagRow"><button type="button" id="recompute">重算今天的账</button><span class="checkline" id="checkResult"></span></div></details>
+<div class="foot"><p class="hint">费用按已识别 token 估算。<br>退出挂件可使用托盘菜单。</p></div>
 
 <script src="tauri-shim.js"></script>
 <script>
@@ -294,8 +233,7 @@
     end: document.getElementById('end'),
     lunch: document.getElementById('lunch'),
     diag: document.getElementById('diag'),
-    perSec: document.getElementById('perSec'),
-    perHour: document.getElementById('perHour'),
+    perToken: document.getElementById('perToken'),
     perDay: document.getElementById('perDay'),
     perMonth: document.getElementById('perMonth'),
     checkLine: document.getElementById('checkLine'),
@@ -305,7 +243,6 @@
 
   var cfg = Object.assign({}, DEF);
   var currentTheme = 'dark';
-  var currentCharacter = 'webm';
   var currentRest = 'double';
 
   /* 休息制度：double 双休 / single 单休（只休周日）/ alternate 大小周（周六逢双周休） */
@@ -338,17 +275,14 @@
 
   function setTheme(t) {
     currentTheme = (t === 'light' || t === 'gold') ? t : 'dark';
+    document.body.dataset.settingsTheme = currentTheme;
+    try {
+      var layer = window.parent.document.getElementById('settingsLayer');
+      if (layer) layer.dataset.settingsTheme = currentTheme;
+    } catch (e) {}
     var btns = document.querySelectorAll('#seg button');
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('on', btns[i].getAttribute('data-theme') === currentTheme);
-    }
-  }
-
-  function setCharacter(value) {
-    currentCharacter = value === 'atlas' ? 'atlas' : 'webm';
-    var btns = document.querySelectorAll('#segCharacter button');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('on', btns[i].getAttribute('data-character') === currentCharacter);
     }
   }
 
@@ -379,7 +313,7 @@
       lunch: Math.max(0, num(el.lunch.value, 0)),
       restMode: currentRest,
       theme: currentTheme,
-      character: currentCharacter,
+      character: 'webm',
       petScale: Number(document.getElementById("petScale").value)
     };
   }
@@ -391,8 +325,6 @@
     var dayPay = c.salary / Math.max(1, c.days);
     var perSec = workSec > 0 ? dayPay / workSec : 0;
 
-    el.perSec.textContent = '¥' + floorTo(perSec, 3).toFixed(3);
-    el.perHour.textContent = '¥' + money(floorTo(workSec > 0 ? dayPay / (workSec / 3600) : 0, 2));
     el.perDay.textContent = '¥' + money(floorTo(dayPay, 2));
 
     // 本月估算：本月已过完的工作日 × 日薪 + 今日已赚
@@ -432,7 +364,6 @@
     el.end.value = c.end;
     el.lunch.value = c.lunch;
     setRest(c.restMode || (c.weekend ? 'none' : 'double'));    setTheme(c.theme);
-    setCharacter(c.character);
     document.getElementById("petScale").value = c.petScale || 130;
     document.getElementById("petScaleValue").textContent = (c.petScale || 130) + "%";
   }
@@ -473,14 +404,6 @@
     });
   }
 
-  var characterBtns = document.querySelectorAll('#segCharacter button');
-  for (var j = 0; j < characterBtns.length; j++) {
-    characterBtns[j].addEventListener('click', function () {
-      setCharacter(this.getAttribute('data-character'));
-      push();
-    });
-  }
-
   /* ---------------- 自检 ---------------- */
   function showCheck(report) {
     var today = report.today || {};
@@ -505,7 +428,16 @@
     });
   });
 
-  api.getState().then(showCheck).catch(function () {
+  function showTps(report) {
+    if (!report || !Object.prototype.hasOwnProperty.call(report, 'tps')) return;
+    el.perToken.textContent = typeof report.tps === 'number' && isFinite(report.tps)
+      ? report.tps.toFixed(1) : '—';
+  }
+  var tpsTimer = setInterval(function () {
+    api.getState().then(showTps).catch(function () {});
+  }, 5000);
+  window.addEventListener('pagehide', function () { clearInterval(tpsTimer); });
+  api.getState().then(function (report) { showCheck(report); showTps(report); }).catch(function () {
     el.checkLine.textContent = '自检读取失败';
   });
 

@@ -1,0 +1,11 @@
+body{padding:14px 22px 18px;font-size:12px}
+.head{display:none}.form{gap:0}.settings-section{display:flex;flex-direction:column;gap:10px;padding-bottom:16px}.settings-section + .settings-section{border-top:1px solid var(--rule);padding-top:16px}
+.settings-section h2{margin:0;font-size:12px;color:var(--accent);font-weight:500}
+.field>label{font-size:11px;letter-spacing:0}.setting-line{flex-direction:row;align-items:center;justify-content:space-between;min-height:30px}
+.setting-line input{width:90px}.setting-line .seg{width:174px}.setting-line #segCharacter{width:116px}.seg button{font-size:11px;padding:7px 10px;min-height:30px}
+input[type=number],input[type=time]{font-size:13px;padding:7px 10px;height:35px}
+.size-line{display:flex;flex-direction:row;align-items:center;gap:12px;min-height:30px}.size-line label{white-space:nowrap;min-width:70px}.size-line input{flex:1;min-width:0;width:0;margin:0;cursor:ew-resize}
+body[data-settings-theme] #resetPetScale{border:0;padding:5px 0;font-size:11px;color:var(--accent);background:transparent;white-space:nowrap;cursor:pointer}
+.stats{margin-top:0;padding-top:16px;border:0;border-top:1px solid var(--rule);border-radius:0;background:transparent;grid-template-columns:1fr 1.2fr 1.2fr;gap:8px;overflow:visible}
+.stat{border:0;padding:0;min-width:0}.stat b{font-size:15px}.stat span{font-size:10px}.stat.hi b{color:var(--ink)}
+.diagnostics{margin-top:16px;color:var(--ink-2);font-size:11px}.diagnostics summary{cursor:pointer;min-height:24px}.diagnostics[open] summary{margin-bottom:8px}.foot{border:0;padding:0;margin-top:12px}.hint{font-size:10px}.diag:empty{display:none}

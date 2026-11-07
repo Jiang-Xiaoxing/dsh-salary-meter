@@ -23,47 +23,87 @@
 /* 余粮：不要容器，数字直接浮在人物脚下，底下一条细线。
    用户 23:14 定：涨钱数字往上滚、变绿、箭头朝上；扣钱往下滚、变红、箭头朝下。 */
 [data-salary-meter] .sm-balance {
-  position:absolute;top:300px;left:50%;transform:translateX(-50%);width:auto;min-width:214px;height:auto;
+  position:absolute;top:300px;left:50%;transform:translateX(-50%);width:max-content;max-width:424px;min-width:214px;height:auto;
   z-index:3;
-  display:flex;align-items:flex-end;justify-content:center;gap:8px;
+  display:flex;align-items:baseline;justify-content:center;gap:10px;
   padding:0 0 11px;background:none;border:0;border-radius:0;box-shadow:none;
   font-size:21px;line-height:1;letter-spacing:0;cursor:pointer;-webkit-app-region:no-drag;
-  /* 余粮这行没有底板，裸字浮在人物脚下。浅色主题是深色字，碰上深色背景就糊，
-     所以套一圈同亮度描边把字托起来（用户 13:16 选「加描边」）。
-     子元素（余粮/≈¥/数字/休息日/箭头）都继承这层，不用逐个写。 */
-  text-shadow:0 0 2px rgba(255,255,255,.95),0 0 8px rgba(255,255,255,.8),0 1px 0 rgba(255,255,255,.9);
+  font-family:'Salary Noto Sans SC',sans-serif;font-weight:400;color:#f0f2f6;
+  white-space:nowrap;
+  text-shadow:0 1px 1px #0008;
 }
-/* 深色/金色主题本来就是浅色字，描边翻成黑色，压在浅色网页上也清楚 */
-[data-salary-meter][data-theme='dark'] .sm-balance,
-[data-salary-meter][data-theme='gold'] .sm-balance {
-  text-shadow:0 0 2px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.8),0 1px 0 rgba(0,0,0,.9);
-}
+[data-salary-meter][data-theme='light'] .sm-balance {color:#353b48;text-shadow:none}
+[data-salary-meter][data-theme='gold'] .sm-balance {color:var(--sm-text)}
 [data-salary-meter] .sm-balance::after {
   content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:214px;height:1px;pointer-events:none;
   background:linear-gradient(90deg,transparent,rgba(116,138,170,.55),transparent);
 }
 [data-salary-meter] .sm-balance:focus-visible{outline:2px solid var(--sm-blue);outline-offset:6px;border-radius:8px}
-[data-salary-meter] .sm-food-label{font-size:11px;margin:0 0 3px;color:var(--sm-muted);letter-spacing:.06em}
+[data-salary-meter] .sm-food-label{font-size:15px;font-weight:400;margin:0;color:inherit;letter-spacing:0}
 [data-salary-meter] .sm-money {
   display:inline-flex;align-items:baseline;gap:1px;
   font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;
-  color:var(--sm-text);text-shadow:inherit;
+  color:inherit;text-shadow:inherit;
   transition:color .2s ease;
 }
-[data-salary-meter] #balancePrefix{font-size:13px;font-weight:500;opacity:.8}
-[data-salary-meter] #balanceValue{display:inline-block;font-size:26px}
-/* 箭头始终占同样宽度，只在 up/down 时显形；字符由 JS 定住，淡出时不会跳回 ▲ */
-[data-salary-meter] .sm-delta{display:inline-block;width:10px;text-align:center;font-size:10px;line-height:1;opacity:0;margin-left:2px;transition:opacity .22s ease}
+[data-salary-meter] #balancePrefix{font-size:15px;font-weight:400;color:inherit;opacity:1}
+[data-salary-meter] #balancePrefix:empty{display:none}
+[data-salary-meter] #balanceUnit{font-size:15px;font-weight:400;color:inherit;margin-left:5px}
+[data-salary-meter] #balanceValue{display:inline-block;font-size:clamp(16px,calc(240px / var(--sm-digits,6)),26px);letter-spacing:-.4px;line-height:1;white-space:nowrap;transition:width .2s ease}
+/* 机械计数器：每一位数字是一条竖向滚轮（0-9 排三份，靠 transform 转动）。
+   只有变化的位会在自己的窗口里滚过去；负号、小数点、逗号、后面的「元」不动。 */
+[data-salary-meter] #balanceValue .sm-slot{position:relative;display:inline-block;text-align:center;vertical-align:baseline;line-height:1;transition:opacity .18s ease}
+[data-salary-meter] #balanceValue .sm-slot-digit{width:1ch}
+[data-salary-meter] #balanceValue .sm-glyph{display:inline-block}
+[data-salary-meter] #balanceValue .sm-strut{display:inline-block;visibility:hidden}
+[data-salary-meter] #balanceValue .sm-reel{
+  position:absolute;left:0;right:0;top:0;height:1em;display:block;pointer-events:none;overflow:hidden;
+}
+[data-salary-meter] #balanceValue .sm-reel-strip{display:block;will-change:transform;backface-visibility:hidden}
+[data-salary-meter] #balanceValue .sm-reel-item{display:block;height:1em;line-height:1}
+[data-salary-meter] #balanceValue .sm-slot-pending{opacity:0}
+[data-salary-meter] #balanceValue .sm-slot-exit{opacity:0}
+/* 方向箭头：慢变单箭头、快变双箭头；箭头沿着变化方向轻轻流动。
+   宽度固定，显不显示都不挤动旁边的东西。 */
+[data-salary-meter] .sm-delta{
+  display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  width:14px;height:20px;margin-left:4px;align-self:center;opacity:0;transition:opacity .2s ease;
+}
+[data-salary-meter] .sm-delta[data-on='true']{opacity:1}
+[data-salary-meter] .sm-delta[data-dir='up']{color:#17a673}
+[data-salary-meter] .sm-delta[data-dir='down']{color:#dc4545}
+[data-salary-meter] .sm-delta .sm-chev{
+  display:block;width:9px;height:9px;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;
+  border-radius:1.5px;opacity:.3;transform:rotate(45deg);
+}
+[data-salary-meter] .sm-delta .sm-chev:nth-child(2){display:none}
+[data-salary-meter] .sm-delta.sm-double .sm-chev:nth-child(2){display:block}
+[data-salary-meter] .sm-delta[data-dir='down'] .sm-chev{animation:smChevDown 1.25s ease-in-out infinite}
+[data-salary-meter] .sm-delta[data-dir='up'] .sm-chev{animation:smChevUp 1.25s ease-in-out infinite}
+[data-salary-meter] .sm-delta .sm-chev:nth-child(2){animation-delay:-.62s}
+@keyframes smChevDown{
+  0%{transform:translateY(-2.5px) rotate(45deg);opacity:.15}
+  45%{opacity:1}
+  100%{transform:translateY(2.5px) rotate(45deg);opacity:.15}
+}
+@keyframes smChevUp{
+  0%{transform:translateY(2.5px) rotate(-135deg);opacity:.15}
+  45%{opacity:1}
+  100%{transform:translateY(-2.5px) rotate(-135deg);opacity:.15}
+}
 [data-salary-meter] .sm-balance.up .sm-money{color:#17a673}
-[data-salary-meter] .sm-balance.up .sm-delta{opacity:1;color:#17a673}
 [data-salary-meter] .sm-balance.down .sm-money{color:#dc4545}
-[data-salary-meter] .sm-balance.down .sm-delta{opacity:1;color:#dc4545}
-[data-salary-meter] #balanceValue.roll-up{animation:smRollUp .2s cubic-bezier(.2,.7,.3,1)}
-[data-salary-meter] #balanceValue.roll-down{animation:smRollDown .2s cubic-bezier(.2,.7,.3,1)}
-@keyframes smRollUp{from{transform:translateY(58%);opacity:.15}to{transform:translateY(0);opacity:1}}
-@keyframes smRollDown{from{transform:translateY(-58%);opacity:.15}to{transform:translateY(0);opacity:1}}
-[data-salary-meter] #petStatus{font-size:10px;font-weight:400;margin:0 0 3px;color:var(--sm-muted);white-space:nowrap}
-[data-salary-meter] .sm-balance .sm-toggle{margin-left:2px;min-width:16px;align-self:center}
+[data-salary-meter] #petStatus{font-size:15px;font-weight:400;margin:0;color:inherit;white-space:nowrap}
+/* 「休息日」这段文字本身就是展开按钮：点一下展开、再点收起。
+   平时稍微收一点亮度，鼠标移上去提亮，提示可以点。 */
+[data-salary-meter] .sm-balance .sm-toggle{
+  margin:0;padding:0;border:0;background:none;cursor:pointer;user-select:none;
+  height:auto;min-height:0;letter-spacing:0;
+  font-family:inherit;font-size:15px;font-weight:400;line-height:inherit;color:inherit;text-shadow:inherit;
+  -webkit-app-region:no-drag;opacity:.82;transition:opacity .16s ease;
+}
+[data-salary-meter] .sm-balance .sm-toggle:hover{opacity:1}
+[data-salary-meter] .sm-balance .sm-toggle:focus-visible{opacity:1;outline:2px solid var(--sm-blue);outline-offset:3px;border-radius:4px}
 /* 展开明细：三块拼成一张卡，垫一层跟主题同色、96% 不透明的底板。
    原来 55% 白底，背后的 DSH 窗口文字会透到笔画里，¥0.00 直接发花（大肥鱼 11-07 判定为 bug）。 */
 [data-salary-meter] .sm-top{position:absolute;top:350px;left:85px;width:270px;background:var(--sm-panel,rgba(247,248,250,.96));border-radius:12px 12px 0 0;height:27px;text-shadow:none;font-size:11px}
@@ -81,8 +121,18 @@
 [data-salary-meter][data-expanded='false'] .sm-error{top:345px}
 @media(prefers-reduced-motion:reduce){
   .sm-video{transition:none}
-  [data-salary-meter] #balanceValue.roll-up,
-  [data-salary-meter] #balanceValue.roll-down{animation:none}
+  [data-salary-meter] #balanceValue{transition:none}
+  [data-salary-meter] #balanceValue .sm-slot{transition:none}
+  [data-salary-meter] #balanceValue .sm-reel-strip{transition:none!important}
   [data-salary-meter] .sm-money,
   [data-salary-meter] .sm-delta{transition:none}
+  [data-salary-meter] .sm-delta .sm-chev{animation:none!important}
 }
+/* 已确认的紧凑账目：休息日合并状态，不占空进度行。 */
+[data-salary-meter] .sm-top{height:25px;border-radius:8px 8px 0 0}
+[data-salary-meter] .sm-worktime{top:375px;height:25px}
+[data-salary-meter] .sm-worktime progress{height:2px;margin-top:4px}
+[data-salary-meter] .sm-ledger{top:400px;height:43px;border-radius:0 0 8px 8px;border-top:0}
+[data-salary-meter][data-rest='true'] .sm-worktime{display:none}
+[data-salary-meter][data-rest='true'] .sm-ledger{top:375px}
+

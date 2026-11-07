@@ -1,0 +1,12 @@
+const {app,BrowserWindow}=require('electron'),fs=require('fs'),assert=require('assert/strict'),path=require('path');app.commandLine.appendSwitch('force-device-scale-factor','1');app.setPath('userData','D:/AITools/tmp/salary-slider-check');
+app.whenReady().then(async()=>{try{
+const w=new BrowserWindow({show:false,width:466,height:780,webPreferences:{offscreen:true,sandbox:false,contextIsolation:false,preload:path.join(__dirname,'hour-theme-preload.cjs')}});await w.loadFile(path.join(__dirname,'../renderer/index.html'));
+const run=s=>w.webContents.executeJavaScript(s),sleep=ms=>new Promise(r=>setTimeout(r,ms));await sleep(600);await run("document.querySelector('#settingsBtn').click()");await sleep(700);
+assert.equal(await run("getComputedStyle(document.querySelector('#widget')).visibility"),'hidden');assert.equal(await run("document.querySelector('#widget').hasAttribute('data-tauri-drag-region')"),false);
+await run("document.querySelector('#settingsFrame').contentDocument.querySelector('#petScale').scrollIntoView({block:'center'})");
+const rect=await run("(()=>{const f=document.querySelector('#settingsFrame'),d=f.contentDocument,r=d.querySelector('#petScale').getBoundingClientRect(),p=f.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y,w:r.width,h:r.height,region:d.defaultView.getComputedStyle(d.querySelector('#petScale')).webkitAppRegion}})()");assert.equal(rect.region,'no-drag');
+const y=Math.round(rect.y+rect.h/2),x=Math.round(rect.x+rect.w*.25),end=Math.round(rect.x+rect.w*.85);
+w.webContents.sendInputEvent({type:'mouseMove',x,y});w.webContents.sendInputEvent({type:'mouseDown',x,y,button:'left',clickCount:1});for(let xx=x;xx<=end;xx+=10){w.webContents.sendInputEvent({type:'mouseMove',x:xx,y,button:'left',modifiers:['leftButtonDown']});await sleep(12)}w.webContents.sendInputEvent({type:'mouseUp',x:end,y,button:'left',clickCount:1});await sleep(300);
+const value=await run("Number(document.querySelector('#settingsFrame').contentDocument.querySelector('#petScale').value)");assert(value>=140,'slider should drag toward high end: '+value);assert.equal(await run('(async()=> (await api.getConfig()).petScale)()'),value);
+await run("document.querySelector('#settingsClose').click()");assert.equal(await run("getComputedStyle(document.querySelector('#widget')).visibility"),'visible');console.log('PASS: range mouse drag and config='+value+'; overlay hides underlying drag regions; close restores widget');app.exit(0);
+}catch(e){console.error(e);app.exit(1)}});

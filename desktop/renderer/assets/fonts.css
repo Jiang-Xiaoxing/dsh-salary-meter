@@ -1,0 +1,4 @@
+@font-face {font-family:'Salary Noto Sans SC';src:url('./fonts/NotoSansCJKsc-Regular.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap;}
+@font-face {font-family:'Salary Noto Sans SC';src:url('./fonts/NotoSansCJKsc-Medium.otf') format('opentype');font-weight:500 600;font-style:normal;font-display:swap;}
+body,button,input,select,textarea,[data-salary-meter]{font-family:'Salary Noto Sans SC',sans-serif;}
+[data-salary-meter] .sm-ledger b{font-family:inherit}

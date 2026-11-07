@@ -6,6 +6,7 @@ const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:a
 function target() {
   return {
     events: {},
+    hidden: true,
     addEventListener(k, f) { (this.events[k] ??= []).push(f); },
     fire(k, e) { for (const f of this.events[k] || []) f(e); },
   };
@@ -19,7 +20,7 @@ win.__TAURI__ = {
   window: { getCurrentWindow: () => ({ startDragging: async () => { drag++; } }) },
 };
 const doc = { querySelectorAll: () => [], querySelector: () => pet, getElementById: () => balance };
-vm.runInNewContext(fs.readFileSync('desktop/renderer/tauri-shim.js', 'utf8'), { window: win, document: doc, console });
+vm.runInNewContext(fs.readFileSync('desktop/renderer/tauri-shim.js', 'utf8'), { window: win, document: doc, console, setInterval() {} });
 win.fire('DOMContentLoaded');
 const settle = () => new Promise(r => setImmediate(r));
 

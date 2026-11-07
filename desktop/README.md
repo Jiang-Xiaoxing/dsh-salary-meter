@@ -14,7 +14,7 @@
 - **下班倒计时**：上班中 / 午休中 / 已收工 / 休息日都会跟着变。
 - **偷吃（模型饭钱）**：按 token 用量折算，DeepSeek 工作日 9–12、14–18 走高价款，其余时段五折，其他厂商平价。
 - **三档外观**：深色 / 浅白 / 暗金，点一下立即生效。
-- **九段人物动画**：上班吃东西、忙起来、午休涮火锅、下班庆祝、早上刷牙、休息哼歌、加班熬夜、被抓住偷吃，按状态自动切换；视频读不出来时退回旧版图集。
+- **十一段人物动画**：上班吃东西、忙起来、午休涮火锅或打盹、下班庆祝、早上刷牙、休息哼歌、休息日打游戏、加班熬夜、被抓住偷吃，按状态自动切换；视频读不出来时退回旧版图集。
 - **自检**：设置里能看到今日已算 / 未算多少笔、合计多少、价格表来源，还有一个「重算今天的账」按钮。
 - **桌面浮层**：可以拖到桌面任意位置，能置顶、能鼠标穿透，带托盘图标和开机自启。
 
@@ -32,8 +32,8 @@
 ## 用法
 
 - 拖动胶囊任意空白处可以移动，位置会记住。
-- 点「展开 ⌃」露出人物，点人物会被抓个正着。
-- 点右上角 `⋯` 打开设置：月薪、工作日、上下班时间、午休、外观、人物、自检。
+- 点余额条或状态文字（如「休息日」）展开，露出人物和今日账目；再点一次收起。
+- 点右上角 `⋯` 或右键人物打开设置：月薪、工作日、上下班时间、午休、配色、大小、自检。
 - 托盘图标右键：外观循环切换、始终置顶、鼠标穿透、开机自启、退出。
 
 ## 数据是怎么来的
@@ -57,26 +57,28 @@ npm install
 npm run tauri:build
 ```
 
-产物：`src-tauri\target\release\salary-widget.exe` 和 `src-tauri\target\release\bundle\nsis\SalaryMeter_0.2.0_x64-setup.exe`。
+产物：`src-tauri\target\release\salary-widget.exe` 和 `src-tauri\target\release\bundle\nsis\SalaryMeter_0.2.1_x64-setup.exe`。
 
 目录说明：
 
 - `renderer/` —— 界面（胶囊页 `index.html` + `widget.js`，设置页 `settings.html`）
-- `renderer/assets/webm/` 和 `renderer/pet-scenes.mjs` —— 九段人物动画和场景映射，是插件版同名文件的拷贝；改的时候两边一起改
+- `renderer/assets/webm/` 和 `renderer/pet-scenes.mjs` —— 十一段人物动画和场景映射，是插件版同名文件的拷贝；改的时候两边一起改
 - `src-tauri/src/ledger.rs` —— 扫会话日志、算钱
 - `src-tauri/src/lib.rs` —— 窗口、托盘、命令
 - `assets/`、`main.js`、`preload.js`、`网页版-salary-meter.html` —— 早期的 Electron 版本，留作参考
 
 ## 授权
 
+桌面余额栏使用随应用打包的 Noto Sans CJK SC Regular / Medium 开源字体（SIL OFL 1.1）。字体保持原文件，来源与许可见 [字体说明](renderer/assets/fonts/README.md) 和 [OFL](renderer/assets/fonts/OFL.txt)；发布源码与安装包时保留这些文件，字体许可独立于项目 MIT 许可。
+
 代码沿用同作者 [dsh-salary-meter](https://github.com/Jiang-Xiaoxing/dsh-salary-meter) 插件的 MIT 授权。
 
-**九段人物动画来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)（MIT）**，许可证全文见仓库根目录的 [`LICENSE-dsh-pet`](../LICENSE-dsh-pet)。其中八段取自该仓库的 `assets/webm`；`加班熬夜` 是按 dsh-pet 的抠图流程另外生成的，不是原作者提供的动画。
+**十一段人物动画来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)（MIT）**，许可证全文见仓库根目录的 [`LICENSE-dsh-pet`](../LICENSE-dsh-pet)。其中十段取自该仓库的 `assets/webm`（含「睡觉」「玩游戏气急败坏」两段）；`加班熬夜` 是按 dsh-pet 的抠图流程另外生成的，不是原作者提供的动画。
 
-旧版图集人物（设置里可切回）的立绘是社区「大肥鱼」鲸鱼娘形象的自制素材，参考了 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的二创形象。动画与形象的著作权归各自作者，二次使用请署名。
+旧版图集人物的立绘是社区「大肥鱼」鲸鱼娘形象的自制素材，参考了 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的二创形象。图集现在只作为视频读不出来时的兜底，设置里已不提供切换。动画与形象的著作权归各自作者，二次使用请署名。
 
 ## 桌宠布局（2026-11-06）
 
-人物独立显示在桌面上，脚下余额条显示今日入账减去已统计饭钱。点击余额条展开/收起今日账目；账目右上角的 ⋯ 打开设置，也可以使用托盘菜单。设置中的人物大小支持 80%–160%，自动保存；人物模式支持视频和旧版图集。气泡在场景变化或点击人物时短暂显示。
+人物独立显示在桌面上，脚下余额条显示今日入账减去已统计饭钱。点击余额条或状态文字展开/收起今日账目；账目右上角的 ⋯ 或右键人物打开设置，也可以使用托盘菜单。设置中的人物大小支持 80%–160%，自动保存；人物固定走动画，视频读不出来时才退回旧版图集。气泡在场景变化或点击人物时短暂显示。
 
 本节描述本地新版；上方旧胶囊截图暂供历史参考。开机自启、置顶和鼠标穿透保持原有设置。

@@ -195,11 +195,40 @@ fn price_of(prices: &Prices, model: &str) -> Option<[f64; 3]> {
 
 /* ---------------------------------------------------------------- 计费 */
 
-#[derive(Clone, Copy, Default, serde::Serialize)]
+#[derive(Clone, Default, serde::Serialize)]
 pub struct Totals {
+    pub hour_out: u64,
+    pub hour_dur_ms: f64,
+    #[serde(skip)]
+    samples: Vec<SpeedSample>,
     pub expense: f64,
     pub known: u64,
     pub unknown: u64,
+}
+
+#[derive(Clone)]
+struct SpeedSample {
+    time: i64,
+    output: u64,
+    duration_ms: f64,
+}
+
+impl Totals {
+    fn refresh_hour(&mut self, now: i64) {
+        self.hour_out = 0;
+        self.hour_dur_ms = 0.0;
+        for sample in &self.samples {
+            if sample.time > now - 3_600_000 && sample.time <= now {
+                self.hour_out += sample.output;
+                self.hour_dur_ms += sample.duration_ms;
+            }
+        }
+    }
+
+    pub fn tps(&self) -> Option<f64> {
+        (self.hour_out >= 200 && self.hour_dur_ms >= 500.0)
+            .then(|| self.hour_out as f64 * 1000.0 / self.hour_dur_ms)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -300,9 +329,6 @@ fn scan_file(path: &Path, prices: &Prices, day: &str) -> Totals {
         let Some(time_ms) = event.get("time").and_then(|v| v.as_i64()) else {
             continue;
         };
-        if beijing_day(time_ms) != day {
-            continue;
-        }
         let Some(stream) = event.pointer("/data/stream").and_then(|v| v.as_array()) else {
             continue;
         };
@@ -325,6 +351,27 @@ fn scan_file(path: &Path, prices: &Prices, day: &str) -> Totals {
             cache_read: tokens(usage, "cacheReadTokens"),
             cache_write: tokens(usage, "cacheWriteTokens"),
         };
+        if kind == "assistant/message" && parsed.output >= 200 {
+            let times: Vec<f64> = stream.iter().flat_map(|r|
+                ["time", "time0"].into_iter().filter_map(move |k| r.get(k).and_then(|v| v.as_f64()))
+            ).filter(|v| v.is_finite()).collect();
+            let min = times.iter().copied().reduce(f64::min);
+            let max = times.iter().copied().reduce(f64::max);
+            if let (Some(min), Some(max)) = (min, max) {
+                let dur = max - min;
+                if dur >= 500.0 && dur.is_finite() {
+                    totals.samples.push(SpeedSample {
+                        time: time_ms,
+                        output: parsed.output as u64,
+                        duration_ms: dur,
+                    });
+                }
+            }
+        }
+        // Expenses remain strictly today's; speed samples may cross midnight.
+        if beijing_day(time_ms) != day {
+            continue;
+        }
         match estimate(prices, &route, parsed, time_ms) {
             Some(cost) => {
                 totals.expense += cost;
@@ -377,6 +424,7 @@ fn session_files(home: &Path, since_ms: i64) -> Vec<(PathBuf, u64, u64)> {
 
 #[derive(Default)]
 pub struct ScanCache {
+    day: String,
     entries: HashMap<PathBuf, (u64, u64, Totals)>,
 }
 
@@ -398,7 +446,11 @@ pub struct ScanReport {
 pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanReport {
     let now = now_ms();
     let day = beijing_day(now);
-    let files = session_files(home, day_start_ms(now));
+    if cache.day != day {
+        cache.clear();
+        cache.day = day.clone();
+    }
+    let files = session_files(home, day_start_ms(now).min(now - 3_600_000));
     let mut totals = Totals::default();
     let mut seen = Vec::with_capacity(files.len());
     for (path, modified, len) in files {
@@ -406,21 +458,23 @@ pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanRe
             .entries
             .get(&path)
             .filter(|(m, l, _)| *m == modified && *l == len)
-            .map(|(_, _, value)| *value);
+            .map(|(_, _, value)| value.clone());
         let value = match reuse {
             Some(value) => value,
             None => {
                 let value = scan_file(&path, prices, &day);
-                cache.entries.insert(path.clone(), (modified, len, value));
+                cache.entries.insert(path.clone(), (modified, len, value.clone()));
                 value
             }
         };
+        totals.samples.extend(value.samples);
         totals.expense += value.expense;
         totals.known += value.known;
         totals.unknown += value.unknown;
         seen.push(path);
     }
     cache.entries.retain(|path, _| seen.contains(path));
+    totals.refresh_hour(now);
     ScanReport {
         today: totals,
         sessions: seen.len(),
@@ -428,3 +482,65 @@ pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanRe
         models: prices.count(),
     }
 }
+
+#[cfg(test)]
+mod tps_tests {
+    use super::*;
+
+    #[test]
+    fn rolling_hour_is_weighted_and_expires_without_new_events() {
+        let now = 1793980801000; // 2026-11-07 00:00:01 Beijing // includes previous day's samples
+        let mut totals = Totals::default();
+        for (age, output, duration_ms) in [
+            (100, 200, 1000.0), (2000, 800, 10000.0),
+            (3_600_000, 900, 500.0), (-1, 999, 500.0),
+        ] {
+            totals.samples.push(SpeedSample {time: now - age, output, duration_ms});
+        }
+        totals.refresh_hour(now);
+        assert_eq!(totals.hour_out, 1000);
+        assert_eq!(totals.hour_dur_ms, 11000.0);
+        assert!((totals.tps().unwrap() - 90.909090909).abs() < 0.000001);
+        totals.refresh_hour(now + 3_600_002);
+        assert_eq!(totals.tps(), None);
+    }
+
+    #[test]
+    fn scanner_filters_short_messages_and_keeps_expenses_today_only() {
+        let now = 1793980801000; // 2026-11-07 00:00:01 Beijing
+        let mut lines = vec![serde_json::json!({"type":"request/header", "data":{"header":{"config":{"model":"deepseek-flash"}}}}).to_string()];
+        for (kind, time, output, duration) in [
+            ("assistant/message", now - 2000, 800, 10000),
+            ("assistant/message", now, 200, 500),
+            ("assistant/message", now, 199, 1000),
+            ("assistant/message", now, 800, 499),
+            ("assistant/attempt", now, 800, 1000),
+        ] {
+            lines.push(serde_json::json!({"type":kind,"time":time,"data":{"stream":[
+                {"time0":100,"time":"ignore"},
+                {"type":"chunk","time":100+duration,"chunk":{"type":"usage","usage":{"outputTokens":output}}}
+            ]}}).to_string());
+        }
+        let path = std::env::temp_dir().join(format!("salary-hour-{}.zstd", std::process::id()));
+        fs::write(&path, zstd::stream::encode_all(lines.join("\n").as_bytes(), 0).unwrap()).unwrap();
+        let mut totals = scan_file(&path, &load_prices(None), &beijing_day(now));
+        fs::remove_file(path).unwrap();
+        totals.refresh_hour(now);
+        assert_eq!(totals.hour_out, 1000);
+        assert_eq!(totals.hour_dur_ms, 10500.0);
+        assert_eq!(totals.known, 4);
+        // Saturday off-peak: only today's four usage events, including attempts.
+        assert!((totals.expense - 1999.0 * 8.0 / 1_000_000.0 * 0.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn real_hour() {
+        let Ok(profile) = std::env::var("USERPROFILE") else { return };
+        let home = PathBuf::from(profile).join(".ds-bot");
+        let report = scan_today(&load_prices(None), &mut ScanCache::default(), &home);
+        println!("TPS_HOUR out={} dur={} tps={:?}",
+            report.today.hour_out, report.today.hour_dur_ms, report.today.tps());
+    }
+}
+
+

@@ -2,7 +2,8 @@
  * 桌面版挂件：外观与 DS Bot 里的 dsh-salary-meter 挂件保持一致，
  * 区别只是账本由 Rust 侧直接扫 DS Bot 的会话日志算出来，不依赖插件。
  */
-import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
+import { pickScene, sceneBubble, sceneFileName, clipCount } from './pet-scenes.mjs';
+import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
 
 (function () {
   'use strict';
@@ -53,6 +54,13 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     settingsClose: pick('settingsClose'),
   };
 
+  // 方向箭头：两个小箭头叠成一列，慢变只显示上面那个，快变两个都显示
+  for (let i = 0; i < 2; i++) {
+    const chev = document.createElement('i');
+    chev.className = 'sm-chev';
+    el.arrow.appendChild(chev);
+  }
+
   // 直接用浏览器打开预览时也能跑
   const api = window.api || {
     getState: function () {
@@ -81,7 +89,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   let today = { expense: 0, known: 0, unknown: 0 };
   let expanded = false;
   let bubbleUntil = 0;
-  let bubbleScene = null;
+  let bubbleKey = null; // 场景#段号，气泡跟着当前这一段的文案走
   let mascot = null;
   let mascotTries = 0;
   let mascotGeneration = 0;
@@ -91,7 +99,10 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   let caughtUntil = 0;
   let busyUntil = 0;
   let lastExpense = 0;
-  let sceneCurrent = null;
+  let sceneCurrent = null; // 场景#段号，正在播的那一段
+  let sceneName = null; // 正在播的场景名
+  let sceneTurn = 0; // 正在播的是这个场景里的第几段
+  const sceneTurns = Object.create(null); // 每个场景下一段该播第几段
   let activeVideo = 0;
   let sceneAttempt = 0;
   let videoTimer = null;
@@ -195,11 +206,12 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     for (const key of Object.keys(palette)) style.setProperty(key, palette[key]);
     style.setProperty('--pet-scale', Math.max(80, Math.min(160, num(cfg.petScale, 130))) / 130);
     el.widget.dataset.theme = PALETTES[cfg.theme] ? cfg.theme : 'dark';
+    el.settingsLayer.dataset.settingsTheme = el.widget.dataset.theme;
   }
 
   function applyExpanded() {
     el.widget.dataset.expanded = String(expanded);
-    el.toggle.textContent = expanded ? '⌄' : '⌃';
+    // 「休息日」这段文字本身就是展开按钮，不再改它的文字，只更新无障碍状态
     el.toggle.setAttribute('aria-expanded', String(expanded));
     el.toggle.setAttribute('aria-label', expanded ? '收起账目' : '展开账目');
     if (useVideo()) playScene(currentScene());
@@ -212,25 +224,222 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
   let lastAmount = null;
   let greenMark = null;
   let flashTimer = 0;
+  let arrowTimer = 0;
+  let changeAt = 0;
   let lastDay = '';
   let basisReady = false;
   let lastAnimAt = 0;
 
   function clearMoneyFx() {
     clearTimeout(flashTimer);
+    clearTimeout(arrowTimer);
     flashTimer = 0;
+    arrowTimer = 0;
     el.balance.classList.remove('up', 'down');
-    el.value.classList.remove('roll-up', 'roll-down');
+    el.arrow.dataset.on = 'false';
+  }
+
+  // 箭头：dir 是方向，fast 决定单箭头还是双箭头
+  function showArrow(dir, fast) {
+    el.arrow.dataset.dir = dir;
+    el.arrow.classList.toggle('sm-double', !!fast);
+    el.arrow.dataset.on = 'true';
+    clearTimeout(arrowTimer);
+    arrowTimer = setTimeout(() => { el.arrow.dataset.on = 'false'; }, dir === 'down' ? 2200 : 1600);
+  }
+
+  // 快慢 = 这次变动的大小 ÷ 距上次变动的时间（每秒变动多少元）。
+  // 金额是「一分一分涨」还是「一笔一笔扣」，这么算都能区分开。
+  function noteChange(delta) {
+    const now = performance.now();
+    const gap = Math.max(.08, (now - changeAt) / 1000);
+    const rate = Math.abs(delta) / gap;
+    changeAt = now;
+    if (Math.abs(delta) >= .0005) showArrow(delta >= 0 ? 'up' : 'down', rate >= .08);
   }
 
   function bigFlash(dir, hold) {
-    // 箭头字符由 JS 定住，撤掉 class 时保持最后的方向淡出，不会跳回 ▲
-    el.arrow.textContent = dir === 'up' ? '▲' : '▼';
     el.balance.classList.remove('up', 'down');
     void el.balance.offsetWidth;
     el.balance.classList.add(dir);
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => el.balance.classList.remove('up', 'down'), hold);
+  }
+
+  /* ------------------------------------------------ 金额滚轮（机械计数器） */
+  // 每一位数字是一个独立的竖向滚轮：滚轮上排着 0-9，只有发生变化的那几位转，
+  // 转的时候旧数字滚出窗口、新数字从另一侧滚进来。负号、小数点、逗号、「元」不动。
+  let slots = []; // 和 renderedAmount 的字符一一对应
+  let renderedAmount = null;
+  let slotWidthTimer = 0;
+
+  const REEL_COPIES = 3; // 0-9 排三份，正反转都够用，不会滚到空白
+  const REEL_BASE = 10; // 从中间那份起步
+
+  function motionOff() {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  // 滚轮位置用 em 算：每一格高 1em，不用量像素，换字号也不会错位
+  function placeReel(slot, animate, ms) {
+    slot.strip.style.transition = animate ? 'transform ' + ms + 'ms cubic-bezier(.25,.86,.3,1)' : 'none';
+    slot.strip.style.transform = 'translate3d(0,' + (-slot.pos) + 'em,0)';
+  }
+
+  // 上一次还没转完又来了新值：把当前画面定住，再从这儿接着转
+  function freezeReel(slot) {
+    const computed = getComputedStyle(slot.strip).transform;
+    slot.strip.style.transition = 'none';
+    if (computed && computed !== 'none') {
+      slot.strip.style.transform = computed;
+      void slot.strip.offsetHeight;
+    }
+  }
+
+  // 转完把位置归到中间那份（同一数字，画面完全看不出来）
+  function normalizeReel(slot) {
+    const target = REEL_BASE + Number(slot.ch);
+    if (slot.pos === target) return;
+    slot.pos = target;
+    placeReel(slot, false);
+  }
+
+  function settleSlot(slot) {
+    if (slot.timer) { clearTimeout(slot.timer); slot.timer = 0; }
+    slot.animating = false;
+    if (slot.kind === 'digit') normalizeReel(slot);
+  }
+
+  function makeSlot(ch) {
+    const isDigit = ch >= '0' && ch <= '9';
+    const el = document.createElement('span');
+    if (!isDigit) {
+      el.className = 'sm-slot sm-slot-' + (ch === '.' || ch === ',' ? 'sep' : 'mark');
+      const glyph = document.createElement('span');
+      glyph.className = 'sm-glyph';
+      glyph.textContent = ch;
+      el.appendChild(glyph);
+      return { el, kind: 'char', ch, glyph, timer: 0, animating: false };
+    }
+    // 数字格：看不见的「字」撑出格宽和基线，上面盖一条 0-9 的滚轮
+    el.className = 'sm-slot sm-slot-digit';
+    const strut = document.createElement('span');
+    strut.className = 'sm-strut';
+    strut.textContent = ch;
+    const reel = document.createElement('span');
+    reel.className = 'sm-reel';
+    reel.setAttribute('aria-hidden', 'true');
+    const strip = document.createElement('span');
+    strip.className = 'sm-reel-strip';
+    for (let i = 0; i < 10 * REEL_COPIES; i++) {
+      const item = document.createElement('span');
+      item.className = 'sm-reel-item';
+      item.textContent = String(i % 10);
+      strip.appendChild(item);
+    }
+    reel.appendChild(strip);
+    el.appendChild(strut);
+    el.appendChild(reel);
+    const slot = { el, kind: 'digit', ch, strip, strut, pos: REEL_BASE + Number(ch), timer: 0, animating: false };
+    placeReel(slot, false);
+    return slot;
+  }
+
+  function updateChar(slot, ch) {
+    if (slot.ch === ch) return;
+    slot.ch = ch;
+    slot.glyph.textContent = ch;
+  }
+
+  // 滚轮里塞着一整条 0-9，textContent 会变成一长串；真实金额单独存在 data-amount 上
+  function publishAmount(text) {
+    el.value.dataset.amount = text;
+    el.value.setAttribute('aria-label', text + ' 元');
+  }
+
+  // 数字：转动对应格数；符号/小数点：直接换
+  function rollSlot(slot, ch, dir) {
+    if (slot.kind !== 'digit') { updateChar(slot, ch); return; }
+    if (slot.ch === ch) return;
+    const steps = reelSteps(slot.ch, ch, dir);
+    slot.ch = ch;
+    slot.strut.textContent = ch;
+    if (!steps) return;
+    if (motionOff()) { slot.pos = REEL_BASE + Number(ch); placeReel(slot, false); return; }
+    if (slot.animating) freezeReel(slot);
+    slot.pos += dir >= 0 ? steps : -steps;
+    const ms = reelDuration(steps);
+    slot.animating = true;
+    placeReel(slot, true, ms);
+    clearTimeout(slot.timer);
+    slot.timer = setTimeout(() => {
+      slot.timer = 0;
+      slot.animating = false;
+      normalizeReel(slot);
+    }, ms + 40);
+  }
+
+  // 位数变化时容器宽度跟着补间，避免整个数左右跳一下
+  function animateAmountWidth(before) {
+    const after = el.value.getBoundingClientRect().width;
+    if (!(before > 0) || Math.abs(after - before) < .5) return;
+    el.value.style.width = before + 'px';
+    void el.value.offsetWidth;
+    el.value.style.width = after + 'px';
+    clearTimeout(slotWidthTimer);
+    slotWidthTimer = setTimeout(() => { el.value.style.width = ''; }, 240);
+  }
+
+  function rebuildAmount(text) {
+    renderedAmount = text;
+    slots = [];
+    el.value.textContent = '';
+    for (const ch of text) {
+      const slot = makeSlot(ch);
+      slots.push(slot);
+      el.value.appendChild(slot.el);
+    }
+    publishAmount(text);
+  }
+
+  function renderAmount(text, dir) {
+    if (renderedAmount === null) { rebuildAmount(text); return; }
+    if (renderedAmount === text) return;
+    const before = el.value.getBoundingClientRect().width;
+    const prev = renderedAmount;
+    renderedAmount = text;
+    const plan = planAmounts(prev, text);
+    const leads = plan.filter(cell => cell.kind === 'appear');
+    const drops = plan.filter(cell => cell.kind === 'vanish');
+
+    if (leads.length) {
+      // 位数变多：最左边补几格（进到十位/百位/千分位），淡入而不是滚
+      const fresh = leads.map(cell => makeSlot(cell.to));
+      for (let i = fresh.length - 1; i >= 0; i--) el.value.insertBefore(fresh[i].el, el.value.firstChild);
+      slots = fresh.concat(slots);
+      for (const slot of fresh) slot.el.classList.add('sm-slot-pending');
+      requestAnimationFrame(() => { for (const slot of fresh) slot.el.classList.remove('sm-slot-pending'); });
+    } else if (drops.length) {
+      // 位数变少：最左边几格退场
+      const gone = slots.splice(0, drops.length);
+      for (const slot of gone) {
+        slot.el.classList.add('sm-slot-exit');
+        setTimeout(() => slot.el.remove(), 220);
+      }
+    }
+
+    for (let i = 0; i < plan.length; i++) {
+      const cell = plan[i];
+      if (cell.kind === 'appear' || cell.kind === 'vanish') continue;
+      // plan 下标 → 新字符串里的字符位置：退位只在最左边，所以要减掉
+      const slot = slots[i - drops.length];
+      if (!slot) continue;
+      if (cell.kind === 'same') continue;
+      if (cell.kind === 'roll') rollSlot(slot, cell.to, dir);
+      else updateChar(slot, cell.to);
+    }
+    publishAmount(text);
+    animateAmountWidth(before);
   }
 
   function tickMoney(amount, now) {
@@ -239,10 +448,6 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     if (prev === null || !basisReady) { greenMark = amount; return; }
     const delta = amount - prev;
     if (Math.abs(delta) < 0.0005) return;
-
-    el.value.classList.remove('roll-up', 'roll-down');
-    void el.value.offsetWidth;
-    el.value.classList.add(delta > 0 ? 'roll-up' : 'roll-down');
 
     if (delta < 0) {
       // 扣钱不节流——这次漏掉就永远补不回来了
@@ -275,18 +480,21 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
       clearMoneyFx();
     }
 
-    el.statusTitle.textContent = '今日账目';
+    el.widget.dataset.rest = String(wage.rest);
+    el.statusTitle.textContent = wage.rest ? '今天休息' : '今日账目';
     el.statusTitle.title = wage.status.replace(/\s/g, '');
     el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 
     const negative = amount < 0;
-    const text = money(Math.abs(amount));
-    // 负号放在 ¥ 前面（−¥0.85），不要 ¥ −0.85
-    el.prefix.textContent = (negative ? '−' : '') + (partial ? '≤ ¥' : '¥');
-    const changed = el.value.textContent !== text;
+    const text = (negative ? "−" : "") + money(Math.abs(amount));
+    // 单位放数字后；统计有遗漏时，实际余粮不大于当前估算。
+    el.prefix.textContent = partial ? '≤' : '';
+    const changed = renderedAmount !== text;
     if (changed) {
-      el.value.textContent = text;
+      if (lastAmount !== null) noteChange(amount - lastAmount);
       el.value.style.setProperty('--sm-digits', text.length);
+      // 涨钱往上滚、扣钱往下滚；首屏没有基准，按涨处理（反正不动画）
+      renderAmount(text, lastAmount === null || amount >= lastAmount ? 1 : -1);
     }
     // 文本没变也要跑一次：首屏真实数据和默认值一样时，基准还没建
     if (changed || lastAmount === null) tickMoney(amount, now);
@@ -298,19 +506,20 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     el.bar.value = Math.max(0, Math.min(1, wage.progress));
 
     el.earned.textContent = '¥' + money(wage.earned);
-    el.expenseLabel.textContent = partial ? '偷吃估算（有遗漏）' : '今日肥鱼偷吃（估算）';
+    el.expenseLabel.textContent = partial ? '偷吃估算（有遗漏）' : '肥鱼饭钱（估算）';
     el.spent.textContent = (partial ? '≥' : '−') + ' ¥' + expenseText();
     el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
     {
       if (useVideo()) {
         const scene = pickScene({ phase: wage.phase, busy: Date.now() < busyUntil, caught: performance.now() < caughtUntil });
-        if (bubbleScene !== scene) {
-          bubbleScene = scene;
+        const turn = playScene(scene);
+        const key = scene + '#' + turn;
+        if (bubbleKey !== key) {
+          bubbleKey = key;
           bubbleUntil = performance.now() + 4500;
         }
-        playScene(scene);
-        el.bubble.textContent = sceneBubble(scene);
+        el.bubble.textContent = sceneBubble(scene, turn);
       } else {
         const pose = performance.now() < caughtUntil ? 'caught' : null;
         el.bubble.textContent = pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
@@ -402,8 +611,9 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
 
   /* -------------------------------------------------------- 人物动画（WebM） */
 
+  // 图集已从设置里去掉：人物一律用视频动画，图集只在视频真的播不了时兜底
   function useVideo() {
-    return !videoBroken && cfg.character !== 'atlas';
+    return !videoBroken;
   }
 
   function currentScene() {
@@ -428,6 +638,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     if (syncCharacterVisibility()) {
       disposeMascot();
       sceneCurrent = null;
+      sceneName = null; // 重开人物时当作「重新进入场景」，轮到下一段
       playScene(currentScene());
     } else {
       stopVideos();
@@ -445,6 +656,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     clearTimeout(videoTimer);
     clearTimeout(videoGuard);
     sceneCurrent = null;
+    sceneName = null;
     sceneAttempt += 1;
     for (const video of el.videos) {
       video.pause();
@@ -452,17 +664,24 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     }
   }
 
-  // 两块 video 轮流装场景，切换时交叉淡入
+  // 两块 video 轮流装场景，切换时交叉淡入。
+  // 一个场景可以挂多段片段：每次重新进入这个场景就换下一段（返回这次播的是第几段）。
   function playScene(scene) {
-    if (!scene || !useVideo()) return;
-    if (scene === sceneCurrent) return;
-    sceneCurrent = scene;
+    if (!scene || !useVideo()) return 0;
+    if (scene !== sceneName) {
+      sceneName = scene;
+      sceneTurn = sceneTurns[scene] || 0;
+      sceneTurns[scene] = (sceneTurn + 1) % Math.max(1, clipCount(scene));
+    }
+    const clipKey = scene + '#' + sceneTurn;
+    if (clipKey === sceneCurrent) return sceneTurn;
+    sceneCurrent = clipKey;
     const videos = el.videos;
     const previous = videos[activeVideo];
     const nextIndex = activeVideo === 0 ? 1 : 0;
     const next = videos[nextIndex];
     const myAttempt = ++sceneAttempt;
-    const src = `assets/webm/${SCENE_FILES[scene]}`;
+    const src = `assets/webm/${sceneFileName(scene, sceneTurn)}`;
     const show = () => {
       next.dataset.on = 'true';
       if (previous) previous.dataset.on = 'false';
@@ -497,6 +716,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     } else {
       play();
     }
+    return sceneTurn;
   }
 
   function videoFailed() {
@@ -518,7 +738,12 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     try { await api.setExpanded(next); } catch (error) { showError('窗口尺寸保存失败'); }
   });
 
-  pick('balanceRow').addEventListener('click', event => { if (!event.target.closest('button')) el.toggle.click(); });
+  pick('balanceRow').addEventListener('click', event => { if (!event.target.closest('button, .sm-toggle')) el.toggle.click(); });
+  el.toggle.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    el.toggle.click();
+  });
   pick('balanceRow').addEventListener('keydown', event => { if (event.target === pick('balanceRow') && ['Enter', ' '].includes(event.key)) { event.preventDefault(); el.toggle.click(); } });
 
   el.settingsBtn.addEventListener('click', () => openSettings());
@@ -541,6 +766,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     if (!el.settingsFrame.getAttribute('src').includes('settings.html')) {
       el.settingsFrame.setAttribute('src', 'settings.html');
     }
+    document.body.classList.add("settings-open");
     el.settingsLayer.hidden = false;
     el.mascotBtn.blur();
     try { api.setMode('settings'); } catch (error) { /* 尺寸改不动也照样能用 */ }
@@ -550,6 +776,7 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     if (el.settingsLayer.hidden) return;
     trace('close @ ' + (new Error().stack || '').split('\n').slice(1, 3).join(' | '));
     el.settingsLayer.hidden = true;
+    document.body.classList.remove("settings-open");
     try { api.setMode('widget'); } catch (error) { /* ignore */ }
   }
 
@@ -558,6 +785,13 @@ import { pickScene, sceneBubble, SCENE_FILES } from './pet-scenes.mjs';
     bubbleUntil = performance.now() + 4500;
     if (mascot) mascot.catch();
     paint();
+  });
+
+  // 右键大肥鱼也能打开设置：顶上那个「⋯」太难找（用户 20:05 提的）
+  el.mascotBtn.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSettings();
   });
 
   if (api.onConfig) {

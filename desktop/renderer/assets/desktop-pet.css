@@ -48,10 +48,10 @@
 }
 [data-salary-meter] #balancePrefix{font-size:15px;font-weight:400;color:inherit;opacity:1}
 [data-salary-meter] #balancePrefix:empty{display:none}
-[data-salary-meter] #balanceUnit{font-size:15px;font-weight:400;color:inherit;margin-left:5px}
+[data-salary-meter] #balanceCurrency{font-size:15px;font-weight:400;color:inherit;margin-right:3px}
 [data-salary-meter] #balanceValue{display:inline-block;font-size:clamp(16px,calc(240px / var(--sm-digits,6)),26px);letter-spacing:-.4px;line-height:1;white-space:nowrap;transition:width .2s ease}
 /* 机械计数器：每一位数字是一条竖向滚轮（0-9 排三份，靠 transform 转动）。
-   只有变化的位会在自己的窗口里滚过去；负号、小数点、逗号、后面的「元」不动。 */
+   只有变化的位会在自己的窗口里滚过去；负号、小数点、逗号、前面的 ¥ 不动。 */
 [data-salary-meter] #balanceValue .sm-slot{position:relative;display:inline-block;text-align:center;vertical-align:baseline;line-height:1;transition:opacity .18s ease}
 [data-salary-meter] #balanceValue .sm-slot-digit{width:1ch}
 [data-salary-meter] #balanceValue .sm-glyph{display:inline-block}

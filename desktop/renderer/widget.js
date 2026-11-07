@@ -268,7 +268,7 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
 
   /* ------------------------------------------------ 金额滚轮（机械计数器） */
   // 每一位数字是一个独立的竖向滚轮：滚轮上排着 0-9，只有发生变化的那几位转，
-  // 转的时候旧数字滚出窗口、新数字从另一侧滚进来。负号、小数点、逗号、「元」不动。
+  // 转的时候旧数字滚出窗口、新数字从另一侧滚进来。负号、小数点、逗号、前面的 ¥ 不动。
   let slots = []; // 和 renderedAmount 的字符一一对应
   let renderedAmount = null;
   let slotWidthTimer = 0;
@@ -352,9 +352,10 @@ import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
   }
 
   // 滚轮里塞着一整条 0-9，textContent 会变成一长串；真实金额单独存在 data-amount 上
+  // 货币符号 ¥ 在数字前面（负号之前），和明细里的写法一致
   function publishAmount(text) {
     el.value.dataset.amount = text;
-    el.value.setAttribute('aria-label', text + ' 元');
+    el.value.setAttribute('aria-label', '¥' + text);
   }
 
   // 数字：转动对应格数；符号/小数点：直接换

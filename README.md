@@ -108,7 +108,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
 | 加班熬夜 | 按 dsh-pet 公开的抠图流程自己做的一段（绿幕抠像 → 站位归一化 → 转透明 VP9），不是原作者提供的动画 | 本项目自制，随 MIT |
 | 伸手抓抓抓（彩蛋） | AI 生成绿幕视频后走同一套流程转透明，2026-11-08 加入 | 本项目自制，随 MIT |
 
-**插件版的图集人物**（DSH 窗口里那套静态九姿态，WebGL 插值）：立绘按社区“大肥鱼”鲸鱼娘形象用内置生图工具自制，不是从 dsh-pet 拿的素材；它现在也只在桌面版的视频播不出来时作兜底。
+**插件版的图集人物**（DSH 窗口里那套静态九姿态，WebGL 插值）：立绘按社区“大肥鱼”鲸鱼娘形象用内置生图工具自制，不是从 dsh-pet 拿的素材。桌面版已经不再用它兜底——视频播不出来时人物先隐藏，60 秒后自动重试。
 
 形象参考包括《吃白饭的大肥鱼》《蓝色大肥鱼表情包》《家里来了个吃白饭的大肥鱼》等二创，感谢社区创作者的形象和表达。插件介绍结构参考 dsh-pet 和 dsh-sidebar-qa。[吃白饭的大肥鱼](https://www.bilibili.com/video/BV1JFtZ6iEpt/)、[蓝色大肥鱼表情包](https://www.bilibili.com/video/BV1V88G6TEvg/)、[家里来了个吃白饭的大肥鱼](https://www.bilibili.com/video/BV1bXHW66Es5/)、[dsh-pet](https://github.com/PC2005-cloud/dsh-pet)、[dsh-sidebar-qa](https://github.com/ChenRuoT/dsh-sidebar-qa)
 

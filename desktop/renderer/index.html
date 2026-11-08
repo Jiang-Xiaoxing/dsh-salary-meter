@@ -41,6 +41,11 @@
   [data-salary-meter][data-expanded='false'][data-egg='true'] .sm-bubble{
     display:block;top:120px;left:auto;right:10px;max-width:168px;
   }
+  /* hidden 必须还能盖住上面那条：(0,5,0) > (0,4,0)。否则收起态台词会一直挂到 10 秒，
+     跟展开态 3 秒收起不一致。 */
+  [data-salary-meter][data-expanded='false'][data-egg='true'] .sm-bubble[hidden]{
+    display:none;
+  }
 
   .sm-icon,
   .sm-toggle{

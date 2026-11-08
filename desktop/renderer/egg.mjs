@@ -5,6 +5,7 @@
 
 export const EGG = Object.freeze({
   showMs: 3000, // 显示清零停留时间
+  clipMs: 10050, // 抓抓抓动画保持时间：整段 10.042 秒播完再收手，别切在动作中间
   bubble: 'token 来，token 来',
 });
 

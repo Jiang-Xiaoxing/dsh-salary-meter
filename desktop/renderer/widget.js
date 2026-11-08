@@ -115,6 +115,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   /* ------------------------------------------------------------ 彩蛋状态 */
   // 两个彩蛋共用一个效果：余粮显示成 ¥0.00 停 3 秒，只动显示层，账本一分不碰
   let eggUntil = 0; // 清零显示到什么时候（performance.now）
+  let eggClipUntil = 0; // 抓抓抓动画播到什么时候（比清零长，整段放完再切回）
   let eggWasActive = false;
   let bubbleMutedUntil = 0; // 彩蛋恢复后这段时间别冒气泡
   let clickTimes = []; // 最近几次点人物的时间，3 秒窗口外的会被丢掉
@@ -464,10 +465,16 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     return performance.now() < eggUntil;
   }
 
+  // 动画保持窗口比清零显示长：grab 这段 10.042 秒，播完整段再切回正常场景
+  function eggClipActive() {
+    return performance.now() < eggClipUntil;
+  }
+
   function triggerEgg() {
     const now = performance.now();
-    if (now < eggUntil) return false; // 连着触发不叠加，先等这轮放完
+    if (now < eggClipUntil) return false; // 整段动画放完前不叠加，连点也只算一轮
     eggUntil = now + EGG.showMs;
+    eggClipUntil = now + EGG.clipMs;
     bubbleMutedUntil = 0;
     lastPoke = now; // 放完彩蛋重新起算「5 分钟没碰」，避免刚结束又掷骰
     clickTimes = []; // 连点计数清掉，一次彩蛋只算一轮
@@ -500,7 +507,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (!el.settingsLayer.hidden) { lastPoke = performance.now(); return; }
     // 收起态看不到人物也看不到气泡，清零只会像故障，所以这个彩蛋只在展开时掷
     if (!expanded) return;
-    if (eggActive()) return;
+    if (eggClipActive()) return;
     const res = rollIdleEgg({ lastPoke, now: performance.now(), lastRoll: idleRollAt, rand: Math.random() });
     idleRollAt = res.lastRoll;
     if (res.fire) triggerEgg();
@@ -551,6 +558,10 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
     // 彩蛋期间：显示层清零（¥0.00），账本和 lastAmount 照原样走，恢复时不闪不提示
     const egg = eggActive();
+    const eggClip = eggClipActive();
+    // 收起态平时不显示气泡，彩蛋期间靠这个标记放开（CSS 里按 data-egg 覆盖 display:none）
+    if (eggClip) el.widget.dataset.egg = 'true';
+    else delete el.widget.dataset.egg;
     const negative = amount < 0;
     const text = egg ? '0.00' : (negative ? "−" : "") + money(Math.abs(amount));
     // 统计有遗漏时，实际余粮不大于当前估算；彩蛋期间不显示「≤」，免得出现 ≤¥0.00
@@ -588,7 +599,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
           phase: wage.phase,
           busy: Date.now() < busyUntil,
           caught: performance.now() < caughtUntil,
-          egg,
+          egg: eggClip, // 场景看 10 秒的动画窗口，不只是 3 秒的清零窗口
         });
         const turn = playScene(scene, gamingAllowed());
         const key = scene + '#' + turn;

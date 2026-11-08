@@ -35,6 +35,13 @@
   [data-salary-meter][data-expanded='false'] .sm-bubble,
   [data-salary-meter][data-expanded='false'] .sm-worktime progress{display:none}
 
+  /* 彩蛋期间收起态也要看得见台词：特异性 (0,4,0) 压过上面那条 display:none，
+     只在 data-egg 期间生效，其他场景收起态照旧不显示。位置挪到人物头右侧，
+     避开顶部信息行和底部金额行（基线 top 14px 会撞到顶部）。 */
+  [data-salary-meter][data-expanded='false'][data-egg='true'] .sm-bubble{
+    display:block;top:120px;left:auto;right:10px;max-width:168px;
+  }
+
   .sm-icon,
   .sm-toggle{
     background:transparent;

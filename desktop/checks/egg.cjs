@@ -24,6 +24,9 @@ function check(name, ok, detail) {
   check('待机概率 2%', egg.IDLE_EGG.chance === 0.02);
   check('待机概率明显低于连点', egg.IDLE_EGG.chance < egg.CLICK_EGG.chance / 5);
   check('清零停留 3 秒', egg.EGG.showMs === 3000);
+  check('抓抓抓动画保持 10.05 秒', egg.EGG.clipMs === 10050);
+  check('动画比清零显示长（整段播完才收手）', egg.EGG.clipMs > egg.EGG.showMs);
+  check('动画盖得住整段 10.042 秒', egg.EGG.clipMs >= 10042);
   check('气泡文案', egg.EGG.bubble === 'token 来，token 来');
 
   // 连点：3 秒窗口怎么数
@@ -58,5 +61,5 @@ function check(name, ok, detail) {
   check('4.5 秒后放开', egg.bubbleMuted(1000, 5600) === false);
 
   if (failures) { console.log(`\nFAILED: ${failures} 项不通过`); process.exit(1); }
-  console.log('\nPASS: 连点 6 下起・15%，待机 5 分钟・每 30 秒・2%，清零 3 秒');
+  console.log('\nPASS: 连点 6 下起・15%，待机 5 分钟・每 30 秒・2%，清零 3 秒，抓抓抓动画满 10.05 秒');
 })();

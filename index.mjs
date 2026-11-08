@@ -152,6 +152,23 @@ export async function apply(ctx) {
   ctx.effect(() => () => clearInterval(priceTimer), 'salary-meter: refresh prices');
   let sessions = new WeakMap();
   const active = new Set();
+  /* 忙闲心跳：桌面挂件读这个文件判断「DS Bot 是不是真的还有任务在跑」。
+     状态一变立刻写，另外每 5 秒续期一次——长任务期间没有事件也要续，
+     否则挂件那边 10 秒就判过期、退回费用估算。 */
+  const busyFile = join(process.env.APPDATA || join(homedir(), '.ds-bot'), 'com.local.salarymeter', 'dsh-busy.json');
+  let busyWrites = Promise.resolve();
+  let busyTimer = null;
+  function liveSessions() {
+    const live = ctx.sessions.list();
+    const liveIds = new Set(live.map(session => session.id));
+    // 会话关掉/删掉时要把它从「在跑」里清掉，否则 active 会一直留着
+    for (const id of active) if (!liveIds.has(id)) active.delete(id);
+    return live;
+  }
+  function publishBusy(reason) {
+    const snapshot = { busy: active.size > 0, sessions: active.size, at: Date.now(), reason };
+    busyWrites = busyWrites.then(() => atomicJson(busyFile, snapshot)).catch(() => {});
+  }
   let writes = Promise.resolve();
   let writeError = null;
   let configWrites = Promise.resolve();
@@ -173,6 +190,7 @@ export async function apply(ctx) {
       sessions.set(session, cursor);
     }
     let changed = false;
+    let activeChanged = false;
     for (const event of session.snapshotEvents(cursor.seq)) {
       cursor.seq = event.seq + 1;
       if (event.type === 'request/header') {
@@ -180,13 +198,19 @@ export async function apply(ctx) {
         if (config?.model) cursor.route = config;
       }
       if (event.seq < session.inheritedEventCount) continue;
-      if (event.type === 'turn/start') active.add(session.id);
-      if (event.type === 'turn/end') active.delete(session.id);
+      if (event.type === 'turn/start' && !active.has(session.id)) { active.add(session.id); activeChanged = true; }
+      if (event.type === 'turn/end' && active.delete(session.id)) activeChanged = true;
       changed = recordExpense(ledger, session.id, event, cursor.route) || changed;
     }
     if (changed) persistLedger();
+    if (activeChanged) publishBusy('change');
   }
   ctx.on('session/event', session => scan(session));
+  // 启动先把当前会话扫一遍，别等第一次事件才知道有没有任务在跑
+  for (const session of liveSessions()) scan(session);
+  publishBusy('start');
+  busyTimer = setInterval(() => { liveSessions(); publishBusy('tick'); }, 5000);
+  ctx.effect(() => () => clearInterval(busyTimer), 'salary-meter: busy heartbeat');
   // 会话日志是多个 zstd 帧首尾相接；按魔数切开逐帧解压，拼回 JSONL。
   function decodeSessionLog(bytes) {
     const magic = [0x28, 0xb5, 0x2f, 0xfd];

@@ -375,6 +375,27 @@ struct StatePayload {
     updated: i64,
     /* DS Bot 最近一次写会话日志的时间：两分钟内写过就算它还在跑，休息日不播打游戏 */
     last_write: i64,
+    /* 插件写的心跳：DS Bot 里有没有任务在跑（真实状态，优先于上面的估算） */
+    dsh_busy: Option<BusyReport>,
+}
+
+#[derive(Serialize)]
+struct BusyReport {
+    busy: bool,
+    at: i64,
+    sessions: u32,
+}
+
+/// 读插件写的心跳文件，判断 DS Bot 是不是真的还有任务在跑
+fn read_busy_report(app: &AppHandle) -> Option<BusyReport> {
+    let text = fs::read_to_string(data_dir(app).join("dsh-busy.json")).ok()?;
+    let cleaned = text.trim_start_matches('\u{feff}').trim();
+    let value: serde_json::Value = serde_json::from_str(cleaned).ok()?;
+    Some(BusyReport {
+        busy: value.get("busy").and_then(|v| v.as_bool()).unwrap_or(false),
+        at: value.get("at").and_then(|v| v.as_i64())?,
+        sessions: value.get("sessions").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+    })
 }
 
 /// 挂件每 3 秒拉一次：参数 + 今日偷吃（自己扫 DS Bot 的会话日志算出来）。
@@ -393,6 +414,7 @@ fn get_state(app: AppHandle) -> StatePayload {
         sessions: report.sessions,
         updated: ledger::now_ms(),
         last_write: report.last_write_ms,
+        dsh_busy: read_busy_report(&app),
     }
 }
 
@@ -411,6 +433,7 @@ fn recompute_today(app: AppHandle) -> StatePayload {
         sessions: report.sessions,
         updated: ledger::now_ms(),
         last_write: report.last_write_ms,
+        dsh_busy: read_busy_report(&app),
     }
 }
 

@@ -3,6 +3,7 @@
  * 区别只是账本由 Rust 侧直接扫 DS Bot 的会话日志算出来，不依赖插件。
  */
 import { pickScene, sceneBubble, sceneFileName, clipCount, guardTurn } from './pet-scenes.mjs';
+import { decideSceneSwitch, decideAfterClipEnded, nextTurnAfterDisplay } from './scene-scheduler.mjs';
 import { planAmounts, reelSteps, reelDuration } from './odometer.mjs';
 import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from './egg.mjs';
 
@@ -18,12 +19,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     dark: { '--sm-bg': '#232324', '--sm-panel': 'rgba(35,35,36,.96)', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
     light: { '--sm-bg': '#f7f8fa', '--sm-panel': 'rgba(247,248,250,.96)', '--sm-text': '#1f2329', '--sm-muted': '#6b7280', '--sm-line': '#00000014', '--dsw-specific-bubble': '#dfe7f7', '--sm-blue': '#4c6ef5' },
     gold: { '--sm-bg': '#1f1a13', '--sm-panel': 'rgba(31,26,19,.96)', '--sm-text': '#d6b36a', '--sm-muted': '#9c8a63', '--sm-line': '#ffffff14', '--dsw-specific-bubble': '#3a2f1d', '--sm-blue': '#c9a227' },
-  };
-
-  const MESSAGES = {
-    idle: '再吃一口就收工。', scoop: '饭钱到账，开饭。', bite: '我就吃一小口。', chew: '嚼嚼嚼…',
-    peek: '你还在忙呀？', caught: '饭自己跑嘴里的。', wipe: '一点都没浪费。', full: '今天也吃饱啦。',
-    sleep: '抱着饭碗歇一会儿…',
   };
 
   const pick = id => document.getElementById(id);
@@ -44,8 +39,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     spent: pick('spentText'),
     expenseLabel: pick('expenseLabel'),
     bubble: pick('bubble'),
-    canvas: pick('mascotCanvas'),
-    fallbackImg: pick('mascotImg'),
     mascotBtn: pick('mascotBtn'),
     petStage: pick('petStage'),
     videos: [pick('petVideoA'), pick('petVideoB')],
@@ -92,12 +85,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   let expanded = false;
   let bubbleUntil = 0;
   let bubbleKey = null; // 场景#段号，气泡跟着当前这一段的文案走
-  let mascot = null;
-  let mascotTries = 0;
-  let mascotGeneration = 0;
-  let mascotLoading = false;
   let toggleGuardUntil = 0;
-  let action = 'idle';
   let caughtUntil = 0;
   let busyUntil = 0;
   let lastExpense = 0;
@@ -109,6 +97,14 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   let sceneAttempt = 0;
   let videoTimer = null;
   let videoGuard = null;
+  /* 场景调度：想播的和正在播的分开，普通变化等这一段播完再切。
+     playingClip 只有真正播出来才提交；pendingClip 只留最新一个目标。 */
+  let playingClip = null; // { scene, turn, key, gaming }
+  let pendingClip = null; // 等待片尾再切的目标
+  let pendingSince = 0; // pending 从什么时候开始等，用来兜底超时
+  let playingEl = null; // 当前正在播的 video 元素
+  const PENDING_MAX_MS = 16000; // 等太久（暂停、隐藏、加载失败）就强切，别无限等片尾
+  let dshBusy = null; // 插件心跳：{ busy, at }，DS Bot 真的有没有任务在跑
   // 视频播不出来时不再永久退回图集：记一个重试时刻，到点自动再试一次
   const VIDEO_RETRY_MS = 60000;
   let videoRetryAt = 0;
@@ -119,6 +115,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   let eggUntil = 0; // 清零显示到什么时候（performance.now）
   let eggClipUntil = 0; // 抓抓抓动画播到什么时候（比清零长，整段放完再切回）
   let eggClipWasActive = false;
+  let eggShownOnce = false; // 抓抓抓这段是否已经真正播出来过一次（保护期从实际播放算）
   let bubbleMutedUntil = 0; // 彩蛋恢复后这段时间别冒气泡
   let clickTimes = []; // 最近几次点人物的时间，3 秒窗口外的会被丢掉
   let lastPoke = 0; // 最近一次碰挂件的时间，待机彩蛋靠它算静默多久
@@ -230,8 +227,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     // 「休息日」这段文字本身就是展开按钮，不再改它的文字，只更新无障碍状态
     el.toggle.setAttribute('aria-expanded', String(expanded));
     el.toggle.setAttribute('aria-label', expanded ? '收起账目' : '展开账目');
-    if (useVideo()) playScene(currentScene());
-    else setTimeout(() => { if (!useVideo()) ensureMascot(); }, 260);
+    // 展开/收起不重新决定人物动作：窗口尺寸由 Rust 改，动画交给调度层，下一帧照常算
   }
 
   /* 余粮跳动：涨钱往上滚、扣钱往下滚；涨满 1 毛或一扣钱就亮色 + 箭头。
@@ -477,6 +473,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (now < eggClipUntil) return false; // 整段动画放完前不叠加，连点也只算一轮
     eggUntil = now + EGG.showMs;
     eggClipUntil = now + EGG.clipMs;
+    eggShownOnce = false;
     bubbleMutedUntil = 0;
     lastPoke = now; // 放完彩蛋重新起算「5 分钟没碰」，避免刚结束又掷骰
     clickTimes = []; // 连点计数清掉，一次彩蛋只算一轮
@@ -487,20 +484,29 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     lastPoke = performance.now();
   }
 
-  // 整台电脑最近动过键鼠没有。Rust 侧读 GetLastInputInfo，拿不到时退回「挂件被碰过」的判断
-  function userIsActive() {
-    if (userIdleMs !== Infinity) return userIdleMs < 60_000 || performance.now() - lastPoke < 90_000;
-    return performance.now() - lastPoke < 90_000;
+  // 真实任务状态：插件每 5 秒续期一次的心跳，10 秒内有效才算数
+  function dshBusyReport() {
+    if (!dshBusy) return null;
+    return Date.now() - dshBusy.at <= 10_000 ? dshBusy : null;
   }
 
-  // DS Bot 在跑：刚产生费用，或最近两分钟还在往会话日志里写
-  function dsBotActive() {
+  // 忙闲只有一个口径：真实任务状态优先；拿不到才退回「5 秒扣费 / 120 秒日志」的估算
+  function isBusy() {
+    const real = dshBusyReport();
+    if (real) return real.busy === true;
     return Date.now() < busyUntil || (dsLastWrite > 0 && Date.now() - dsLastWrite < 120_000);
   }
 
-  // 休息日第二段是「开黑打游戏」，只有真闲着才播
+  // 整台电脑最近 3 分钟动过键鼠没有。读不到系统空闲时长时按「在忙」处理，宁可少播游戏
+  function userIsActive() {
+    if (!isFinite(userIdleMs)) return true;
+    return userIdleMs < 180_000 || performance.now() - lastPoke < 180_000;
+  }
+
+  // 休息日第二段是「开黑打游戏」：必须真的闲住、没有任务在跑、设置页没开
   function gamingAllowed() {
-    if (userIsActive() || dsBotActive()) return false;
+    if (!isFinite(userIdleMs)) return false; // 拿不到系统空闲时长：保守不许
+    if (isBusy() || userIsActive()) return false;
     return el.settingsLayer.hidden;
   }
 
@@ -598,24 +604,26 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
     {
       if (useVideo()) {
+        const allowGaming = gamingAllowed();
+        const caught = performance.now() < caughtUntil;
         const scene = pickScene({
           phase: wage.phase,
-          busy: Date.now() < busyUntil,
-          caught: performance.now() < caughtUntil,
+          busy: isBusy(),
+          caught,
           egg: eggClip, // 场景看 10 秒的动画窗口，不只是 3 秒的清零窗口
         });
-        const turn = playScene(scene, gamingAllowed());
-        const key = scene + '#' + turn;
+        // 三种情况允许立刻抢占：彩蛋、被抓、正在放游戏但许可没了
+        const revokeGaming = !!(playingClip && playingClip.gaming) && !allowGaming;
+        requestScene(scene, allowGaming, eggClip || caught || revokeGaming);
+        // 气泡跟着「真正播出来的那一段」，不跟还没播的目标
+        const shown = playingClip || { scene, turn: 0 };
+        const key = shown.scene + '#' + shown.turn;
         if (bubbleKey !== key) {
           bubbleKey = key;
           // 彩蛋刚恢复时别让气泡紧跟着冒出来，保持安静
           if (performance.now() >= bubbleMutedUntil) bubbleUntil = performance.now() + 4500;
         }
-        el.bubble.textContent = eggClip ? EGG.bubble : sceneBubble(scene, turn);
-        if (eggClip) bubbleUntil = Math.max(bubbleUntil, eggClipUntil);
-      } else {
-        const pose = performance.now() < caughtUntil ? 'caught' : null;
-        el.bubble.textContent = eggClip ? EGG.bubble : pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
+        el.bubble.textContent = eggClip ? EGG.bubble : sceneBubble(shown.scene, shown.turn);
         if (eggClip) bubbleUntil = Math.max(bubbleUntil, eggClipUntil);
       }
       if (eggClipWasActive && !eggClip) {
@@ -626,9 +634,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       eggClipWasActive = eggClip;
     }
 
-    el.bubble.hidden = performance.now() >= bubbleUntil;
+    // 人物隐藏期间气泡也跟着消失，别让台词浮在空处
+    el.bubble.hidden = el.petStage.hidden || performance.now() >= bubbleUntil;
     pick('petStatus').textContent = wage.status.replace(/\s/g, '');
-    if (mascot) mascot.setBusy(Date.now() < busyUntil);
   }
 
   function expenseText() {
@@ -646,72 +654,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.errorBox.textContent = message;
   }
 
-  /* -------------------------------------------------------------- 人物 */
-
-  async function ensureMascot() {
-    if (mascot || mascotLoading || useVideo()) return;
-    const generation = mascotGeneration;
-    mascotLoading = true;
-    try {
-      const module = await import('./assets/mascot.mjs');
-      if (useVideo() || generation !== mascotGeneration || mascot) return;
-      const controller = await module.createWhaleAnimation(el.canvas, {
-        onAction: value => { action = value; paint(); },
-        onError: () => { if (generation === mascotGeneration && !useVideo()) mascotFailed(); },
-      });
-      if (useVideo() || generation !== mascotGeneration || mascot) {
-        if (controller) controller.dispose();
-        return;
-      }
-      mascot = controller;
-      mascotTries = 0;
-      el.canvas.hidden = false;
-      el.fallbackImg.hidden = true;
-      mascot.setBusy(Date.now() < busyUntil);
-    } catch (error) {
-      if (generation === mascotGeneration && !useVideo()) mascotFailed();
-    } finally {
-      if (generation === mascotGeneration) mascotLoading = false;
-    }
-  }
-
-  // WebGL 上下文丢了（窗口变形、驱动回收）就换一块新画布重来，实在不行退回静态图
-  function mascotFailed() {
-    mascot = null;
-    el.canvas.hidden = true;
-    el.fallbackImg.hidden = false;
-    if (useVideo()) return;
-    if (mascotTries >= 5) return;
-    mascotTries += 1;
-    const stale = el.canvas;
-    const fresh = stale.cloneNode(false);
-    fresh.removeAttribute('data-action');
-    stale.replaceWith(fresh);
-    el.canvas = fresh;
-    setTimeout(() => { if (!useVideo() && !mascot) ensureMascot(); }, 400 * mascotTries);
-  }
-
-  function disposeMascot() {
-    mascotGeneration += 1;
-    mascotLoading = false;
-    if (mascot) {
-      mascot.dispose();
-      mascot = null;
-    }
-    mascotTries = 0;
-    // dispose() 主动释放 WebGL 上下文，下一次必须使用新画布。
-    const fresh = el.canvas.cloneNode(false);
-    fresh.removeAttribute('data-animation');
-    fresh.removeAttribute('data-action');
-    el.canvas.replaceWith(fresh);
-    el.canvas = fresh;
-    el.canvas.hidden = useVideo();
-    el.fallbackImg.hidden = true;
-  }
-
   /* -------------------------------------------------------- 人物动画（WebM） */
 
-  // 图集已从设置里去掉：人物一律用视频动画，图集只在视频真的播不了时兜底
+  // 人物只有视频这一种画法：视频播不出来时人物先隐藏，60 秒后自动重试，不再退回图集
   function useVideo() {
     return performance.now() >= videoRetryAt;
   }
@@ -719,31 +664,32 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   function currentScene() {
     return pickScene({
       phase: computeWage(new Date()).phase,
-      busy: Date.now() < busyUntil,
+      busy: isBusy(),
       caught: performance.now() < caughtUntil,
+      egg: performance.now() < eggClipUntil,
     });
   }
 
   function syncCharacterVisibility() {
     const video = useVideo();
-    el.mascotBtn.classList.toggle('sm-video-mode', video);
+    // 人物只有视频这一种画法；图集已经拿掉，布局固定按视频尺寸算
+    el.mascotBtn.classList.add('sm-video-mode');
     el.petStage.hidden = !video;
-    el.canvas.hidden = video;
-    el.fallbackImg.hidden = true;
     return video;
   }
 
-  // 展开时按当前人物类型启动：视频立刻播，图集要等窗口变完形再建画布
+  // 启动人物：视频立刻播。视频失败期间人物隐藏，等 60 秒重试，不再建图集画布
   function startCharacter() {
-    if (syncCharacterVisibility()) {
-      disposeMascot();
-      sceneCurrent = null;
-      sceneName = null; // 重开人物时当作「重新进入场景」，轮到下一段
-      playScene(currentScene(), gamingAllowed());
-    } else {
+    if (!syncCharacterVisibility()) {
       stopVideos();
-      setTimeout(() => { if (!useVideo()) ensureMascot(); }, 260);
+      return;
     }
+    playingClip = null;
+    pendingClip = null;
+    playingEl = null;
+    sceneCurrent = null;
+    sceneName = null;
+    requestScene(currentScene(), gamingAllowed(), true);
   }
 
   function applyCharacter() {
@@ -757,37 +703,92 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     clearTimeout(videoGuard);
     sceneCurrent = null;
     sceneName = null;
+    sceneTurn = 0;
     sceneAttempt += 1;
+    playingClip = null;
+    pendingClip = null;
+    playingEl = null;
     for (const video of el.videos) {
       video.pause();
       video.dataset.on = 'false';
     }
   }
 
-  // 两块 video 轮流装场景，切换时交叉淡入。
-  // 一个场景可以挂多段片段：每次重新进入这个场景就换下一段（返回这次播的是第几段）。
-  // allowGaming=false 时，休息日轮到的「开黑打游戏」会被换成哼歌那一段。
-  function playScene(scene, allowGaming = true) {
-    if (!scene || !useVideo()) return 0;
-    if (scene !== sceneName) {
-      sceneName = scene;
-      sceneTurn = sceneTurns[scene] || 0;
-      sceneTurns[scene] = (sceneTurn + 1) % Math.max(1, clipCount(scene));
-    }
-    const turn = guardTurn(scene, sceneTurn, allowGaming);
-    const clipKey = scene + '#' + turn;
-    if (clipKey === sceneCurrent) return turn;
-    sceneCurrent = clipKey;
+  /* 场景调度：想播的和正在播的分开。
+     - 普通变化只更新 pending（只留最新一个目标），等当前这一段播到结尾再切，不再从动作中间硬断
+     - 彩蛋、被抓、以及「游戏许可被撤销」允许立刻抢占
+     - sceneTurns 只在片段真正显示出来时才递增，避免「没播也消耗轮次」
+     - video 不再 loop：片尾由 ended 回调决定「重播这一段」还是「切到 pending」 */
+  function targetFor(scene, allowGaming) {
+    const entering = !playingClip || playingClip.scene !== scene;
+    const base = entering ? (sceneTurns[scene] || 0) : playingClip.turn;
+    const turn = guardTurn(scene, base, allowGaming);
+    return { scene, turn, key: scene + '#' + turn, gaming: sceneFileName(scene, turn) === 'gaming.webm' };
+  }
+
+  // 每 100ms 的入口：决定「现在切」还是「等片尾」（判断本体在 scene-scheduler.mjs）
+  function requestScene(scene, allowGaming, immediate) {
+    if (!scene || !useVideo()) return;
+    const target = targetFor(scene, allowGaming);
+    const paused = !playingEl || playingEl.paused || playingEl.ended;
+    const plan = decideSceneSwitch({
+      target,
+      playing: playingClip,
+      pending: pendingClip,
+      pendingSince,
+      now: performance.now(),
+      paused,
+      immediate,
+      maxWaitMs: PENDING_MAX_MS,
+    });
+    pendingClip = plan.pending;
+    pendingSince = plan.pendingSince;
+    if (plan.start) startClip(plan.start, allowGaming);
+  }
+
+  // 片尾：有目标就切，没有就重播这一段
+  function onClipEnded(video) {
+    if (video !== playingEl) return;
+    const plan = decideAfterClipEnded(pendingClip);
+    if (plan.start) { startClip(plan.start, gamingAllowed()); return; }
+    if (!plan.restart) return;
+    try { video.currentTime = 0; video.play().catch(() => {}); } catch (error) { videoFailed(); }
+  }
+
+  // 真正加载并播放一个片段；只有播出来（show）才提交状态
+  function startClip(target, allowGaming) {
+    if (!target || !useVideo()) return;
+    // 显示前再按当前许可核一次：撤销游戏许可属于立即切换，不能等片尾
+    const checked = targetFor(target.scene, allowGaming);
+    if (checked.key !== target.key) { target = checked; pendingClip = checked; }
     const videos = el.videos;
-    const previous = videos[activeVideo];
+    const previous = playingEl;
     const nextIndex = activeVideo === 0 ? 1 : 0;
     const next = videos[nextIndex];
     const myAttempt = ++sceneAttempt;
-    const src = `assets/webm/${sceneFileName(scene, turn)}`;
+    const src = `assets/webm/${sceneFileName(target.scene, target.turn)}`;
     const show = () => {
+      if (sceneAttempt !== myAttempt) return;
+      if (previous && previous !== next) previous.dataset.on = 'false';
       next.dataset.on = 'true';
-      if (previous) previous.dataset.on = 'false';
       activeVideo = nextIndex;
+      playingEl = next;
+      const previousScene = playingClip ? playingClip.scene : null;
+      playingClip = target;
+      sceneCurrent = target.key;
+      sceneName = target.scene;
+      sceneTurn = target.turn;
+      // 只有真正播出来才算「进入这个场景」，这时才轮到下一段
+      // 只有真正播出来才算「进入这个场景」，这时才轮到下一段
+      if (previousScene !== target.scene) {
+        sceneTurns[target.scene] = nextTurnAfterDisplay(target.scene, target.turn, previousScene, clipCount(target.scene));
+      }
+      // 彩蛋这段要从真正播出来的时刻起算整段时长，否则加载耗时会把 10 秒吃掉
+      if (target.scene === 'grab' && !eggShownOnce) {
+        eggShownOnce = true;
+        eggClipUntil = Math.max(eggClipUntil, performance.now() + EGG.clipMs);
+      }
+      if (pendingClip && pendingClip.key === target.key) pendingClip = null;
     };
     const play = () => {
       if (sceneAttempt !== myAttempt) return;
@@ -814,29 +815,28 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       if (document.visibilityState !== 'visible') return;
       videoFailed();
     }, 4000);
-    if (next.getAttribute('src') !== src) {
+    // src 没变也要重载的情况：上一次加载已经报错了（比如素材短暂读不到），
+    // 这时只调 play() 会一直失败，必须先 load() 重新读一次
+    if (next.getAttribute('src') !== src || next.error) {
       next.setAttribute('src', src);
       next.addEventListener('canplay', play, { once: true });
       next.load();
     } else {
       play();
     }
-    return turn;
   }
 
   function videoFailed() {
-    // 不永久放弃：停 60 秒再用视频重试，成功就自动回到 WebM 动画
+    // 不永久放弃：人物先隐藏（不拿图集顶），60 秒后再试视频，成功就自动回来
     videoRetryAt = performance.now() + VIDEO_RETRY_MS;
     stopVideos();
     syncCharacterVisibility();
-    startCharacter();
   }
 
-  // 兜底图集播放期间，到点就重试一次视频
+  // 人物隐藏期间，到点就重试一次视频（收起态也要重试：用户平时就是收起态）
   function retryVideoIfDue() {
     if (!videoRetryAt) return;
     if (performance.now() < videoRetryAt) return;
-    if (!expanded) return;
     if (document.visibilityState !== 'visible') return;
     videoRetryAt = 0;
     syncCharacterVisibility();
@@ -898,6 +898,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   }
 
   el.mascotBtn.addEventListener('click', () => {
+    // 视频失败期间人物是空着的，空白处不接点击，免得误触彩蛋
+    if (el.petStage.hidden) return;
     const now = performance.now();
     notePoke();
     clickTimes.push(now);
@@ -906,7 +908,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (rollClickEgg(clickTimes.length, Math.random())) triggerEgg();
     caughtUntil = now + 2500;
     bubbleUntil = now + 4500;
-    if (mascot) mascot.catch();
     paint();
   });
 
@@ -943,6 +944,10 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
         cfg = Object.assign({}, DEF, state.config || cfg);
         today = state.today || { expense: 0, known: 0, unknown: 0 };
         dsLastWrite = Number(state.last_write) || dsLastWrite;
+        // 插件心跳：DS Bot 是不是真的还有任务在跑（真实状态，优先于费用估算）
+        if (state.dsh_busy && typeof state.dsh_busy.at === 'number') {
+          dshBusy = { busy: state.dsh_busy.busy === true, at: Number(state.dsh_busy.at) || 0 };
+        }
         // 整台电脑的键鼠空闲时长交给系统数，判断「用户是不是正在用电脑」
         if (api.userIdle) {
           api.userIdle().then(ms => { userIdleMs = Number(ms) || 0; }).catch(() => {});
@@ -980,6 +985,11 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   for (const type of ['pointerdown', 'keydown', 'wheel', 'contextmenu']) {
     document.addEventListener(type, notePoke, { capture: true, passive: true });
   }
+  // 片尾事件：有目标就切，没有就重播这一段（video 已取消 loop，靠这里兜住循环）
+  for (const video of el.videos) {
+    video.addEventListener('ended', () => onClipEnded(video));
+  }
+
   setInterval(idleTick, 1000);
 
   setInterval(paint, 100);

@@ -27,7 +27,6 @@
     transition:height .18s ease;
   }
   [data-salary-meter][data-expanded='true']{height:500px}
-  [data-salary-meter] .sm-mascot:not(.sm-video-mode){left:calc(50% - 56px)}
 
   /* 收起时和插件一样：只留顶部信息、余额和下班倒计时 */
   [data-salary-meter][data-expanded='false'] .sm-ledger,
@@ -160,11 +159,9 @@
 
   <button class="sm-mascot" id="mascotBtn" aria-label="鲸鱼娘">
     <span class="sm-stage" id="petStage" hidden>
-      <video class="sm-video" id="petVideoA" muted loop playsinline preload="auto" aria-hidden="true"></video>
-      <video class="sm-video" id="petVideoB" muted loop playsinline preload="auto" aria-hidden="true"></video>
+      <video class="sm-video" id="petVideoA" muted playsinline preload="auto" aria-hidden="true"></video>
+      <video class="sm-video" id="petVideoB" muted playsinline preload="auto" aria-hidden="true"></video>
     </span>
-    <canvas id="mascotCanvas" width="224" height="224" aria-hidden="true"></canvas>
-    <img id="mascotImg" src="assets/actions.png" alt="" hidden>
   </button>
   <div class="sm-bubble" id="bubble">再吃一口就收工。</div>
 

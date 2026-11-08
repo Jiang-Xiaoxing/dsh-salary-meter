@@ -10,8 +10,6 @@
   transform:translateX(-50%) scale(var(--pet-scale));transform-origin:center bottom;
   overflow:hidden;-webkit-app-region:no-drag;z-index:0;
 }
-[data-salary-meter] .sm-mascot:not(.sm-video-mode) {width:224px;height:224px;top:96px}
-[data-salary-meter] .sm-mascot canvas {width:224px;height:224px}
 [data-salary-meter] .sm-bubble {
   display:block;top:calc(300px - 220px * var(--pet-scale));left:60%;right:8px;
   transform:none;max-width:150px;white-space:normal;overflow:visible;

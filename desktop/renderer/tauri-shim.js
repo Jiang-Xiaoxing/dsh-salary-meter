@@ -60,10 +60,11 @@
         if (!node || node.hidden || getComputedStyle(node).display === 'none') return;
         var r = node.getBoundingClientRect();
         if (!r.width || !r.height) return;
-        // 动画画布带透明留白，身体居中；大小随 CSS 变换同步。
+        // 人物是空的（视频失败期间）就不接点击，让鼠标穿过去
         if (pet) {
-          var video = node.classList.contains('sm-video-mode');
-          regions.push({x:r.x+r.width*(video?.32:.12),y:r.y+r.height*(video?.18:.08),width:r.width*(video?.36:.76),height:r.height*(video?.72:.88)});
+          var stage = document.querySelector('#petStage');
+          if (!stage || stage.hidden) return;
+          regions.push({x:r.x+r.width*.32,y:r.y+r.height*.18,width:r.width*.36,height:r.height*.72});
         } else regions.push({x:r.x,y:r.y,width:r.width,height:r.height});
       }
       add(document.querySelector('.sm-mascot'), true);

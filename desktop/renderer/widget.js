@@ -116,7 +116,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   // 两个彩蛋共用一个效果：余粮显示成 ¥0.00 停 3 秒，只动显示层，账本一分不碰
   let eggUntil = 0; // 清零显示到什么时候（performance.now）
   let eggClipUntil = 0; // 抓抓抓动画播到什么时候（比清零长，整段放完再切回）
-  let eggWasActive = false;
+  let eggClipWasActive = false;
   let bubbleMutedUntil = 0; // 彩蛋恢复后这段时间别冒气泡
   let clickTimes = []; // 最近几次点人物的时间，3 秒窗口外的会被丢掉
   let lastPoke = 0; // 最近一次碰挂件的时间，待机彩蛋靠它算静默多久
@@ -608,19 +608,19 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
           // 彩蛋刚恢复时别让气泡紧跟着冒出来，保持安静
           if (performance.now() >= bubbleMutedUntil) bubbleUntil = performance.now() + 4500;
         }
-        el.bubble.textContent = egg ? EGG.bubble : sceneBubble(scene, turn);
-        if (egg) bubbleUntil = Math.max(bubbleUntil, eggUntil);
+        el.bubble.textContent = eggClip ? EGG.bubble : sceneBubble(scene, turn);
+        if (eggClip) bubbleUntil = Math.max(bubbleUntil, eggClipUntil);
       } else {
         const pose = performance.now() < caughtUntil ? 'caught' : null;
-        el.bubble.textContent = egg ? EGG.bubble : pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
-        if (egg) bubbleUntil = Math.max(bubbleUntil, eggUntil);
+        el.bubble.textContent = eggClip ? EGG.bubble : pose === 'caught' ? MESSAGES.caught : (MESSAGES[action] || MESSAGES.idle);
+        if (eggClip) bubbleUntil = Math.max(bubbleUntil, eggClipUntil);
       }
-      if (eggWasActive && !egg) {
-        // 恢复的那一下要安静：气泡立刻收起来，别把场景文案顺势冒出来
+      if (eggClipWasActive && !eggClip) {
+        // 动画收尾的那一下要安静：台词跟着动画一起收，别把场景文案顺势冒出来
         bubbleMutedUntil = performance.now() + 4500;
         bubbleUntil = 0;
       }
-      eggWasActive = egg;
+      eggClipWasActive = eggClip;
     }
 
     el.bubble.hidden = performance.now() >= bubbleUntil;

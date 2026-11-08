@@ -109,7 +109,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   let sceneAttempt = 0;
   let videoTimer = null;
   let videoGuard = null;
-  let videoBroken = false;
+  // 视频播不出来时不再永久退回图集：记一个重试时刻，到点自动再试一次
+  const VIDEO_RETRY_MS = 60000;
+  let videoRetryAt = 0;
   let characterApplied = null;
 
   /* ------------------------------------------------------------ 彩蛋状态 */
@@ -537,6 +539,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   }
 
   function paint() {
+    retryVideoIfDue();
     const now = new Date();
     const wage = computeWage(now);
     const partial = today.unknown > 0;
@@ -710,7 +713,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   // 图集已从设置里去掉：人物一律用视频动画，图集只在视频真的播不了时兜底
   function useVideo() {
-    return !videoBroken;
+    return performance.now() >= videoRetryAt;
   }
 
   function currentScene() {
@@ -744,7 +747,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   }
 
   function applyCharacter() {
-    videoBroken = false;
+    videoRetryAt = 0;
     syncCharacterVisibility();
     startCharacter();
   }
@@ -804,9 +807,12 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
         }, 500);
       }).catch(() => { if (sceneAttempt === myAttempt) videoFailed(); });
     };
-    // 迟迟播不起来也要有结果，不能留一块空白
+    // 迟迟播不起来也要有结果，不能留一块空白。
+    // 但窗口被最小化/遮挡时浏览器会故意拖着不播，那种不算视频坏了，别记成失败。
     videoGuard = setTimeout(() => {
-      if (sceneAttempt === myAttempt && next.dataset.on !== 'true') videoFailed();
+      if (sceneAttempt !== myAttempt || next.dataset.on === 'true') return;
+      if (document.visibilityState !== 'visible') return;
+      videoFailed();
     }, 4000);
     if (next.getAttribute('src') !== src) {
       next.setAttribute('src', src);
@@ -819,8 +825,20 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   }
 
   function videoFailed() {
-    videoBroken = true;
+    // 不永久放弃：停 60 秒再用视频重试，成功就自动回到 WebM 动画
+    videoRetryAt = performance.now() + VIDEO_RETRY_MS;
     stopVideos();
+    syncCharacterVisibility();
+    startCharacter();
+  }
+
+  // 兜底图集播放期间，到点就重试一次视频
+  function retryVideoIfDue() {
+    if (!videoRetryAt) return;
+    if (performance.now() < videoRetryAt) return;
+    if (!expanded) return;
+    if (document.visibilityState !== 'visible') return;
+    videoRetryAt = 0;
     syncCharacterVisibility();
     startCharacter();
   }

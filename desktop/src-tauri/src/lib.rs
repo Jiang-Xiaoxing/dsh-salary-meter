@@ -101,7 +101,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct SavedPos {
     x: i32,
     y: i32,
@@ -209,14 +209,40 @@ fn save_position(app: &AppHandle, x: i32, y: i32) {
         let _ = fs::create_dir_all(dir);
     }
     if let Ok(text) = serde_json::to_string(&SavedPos { x, y }) {
-        let _ = fs::write(path, text);
+        // 先写临时文件再改名：进程在写的半路被强杀时，position.json 不会只剩半截或 0 字节。
+        // 半截文件下次启动会解析失败，然后静默退回默认位置——那就是「重启后位置跑偏」。
+        let tmp = path.with_extension("json.tmp");
+        if fs::write(&tmp, text).is_ok() {
+            let _ = fs::rename(&tmp, &path);
+        }
     }
 }
 
 fn load_position(app: &AppHandle) -> Option<SavedPos> {
-    fs::read_to_string(data_dir(app).join("position.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str::<SavedPos>(&s).ok())
+    // 位置文件可能被外部工具改过：去掉 BOM 和首尾空白再解析，
+    // 以前带 BOM 会解析失败，然后静默退回右下角默认位置，看起来就是「重启后位置跑了」。
+    let text = fs::read_to_string(data_dir(app).join("position.json")).ok()?;
+    let cleaned = text.trim_start_matches('\u{feff}').trim();
+    match serde_json::from_str::<SavedPos>(cleaned) {
+        Ok(pos) => Some(pos),
+        Err(error) => {
+            startup_log(app, &format!("position.json 解析失败: {error}; 原文={cleaned:?}"));
+            None
+        }
+    }
+}
+
+/// 启动过程写一行日志，方便下次「位置又跑了」时有据可查。
+fn startup_log(app: &AppHandle, message: &str) {
+    use std::io::Write;
+    let path = data_dir(app).join("startup.log");
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{ms} {message}");
+    }
 }
 
 /* ---------------------------------------------------------------- 偷吃 */
@@ -385,24 +411,38 @@ fn apply_window_size(app: &AppHandle, expanded: bool) {
     let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
 }
 
-fn clamp_to_monitor(window: &tauri::WebviewWindow) {
-    let (Ok(position), Ok(size), Ok(Some(monitor))) = (
-        window.outer_position(),
-        window.outer_size(),
-        window.current_monitor(),
-    ) else {
+fn clamp_to_monitor(window: &tauri::WebviewWindow, size: tauri::PhysicalSize<u32>) {
+    let (Ok(position), Ok(Some(monitor))) = (window.outer_position(), window.current_monitor()) else {
         return;
     };
-    let area = monitor.size();
-    let origin = monitor.position();
+    // 用工作区（刨掉任务栏）而不是整块屏幕：用整块屏幕的话，放到最下面时页脚会被任务栏盖住
+    let work = monitor.work_area();
+    let work_ok = work.size.width > 0 && work.size.height > 0;
+    let origin = if work_ok { work.position } else { *monitor.position() };
+    let usable = if work_ok { work.size } else { *monitor.size() };
     let margin = 12;
-    let max_x = origin.x + area.width as i32 - size.width as i32 - margin;
-    let max_y = origin.y + area.height as i32 - size.height as i32 - margin;
+    let max_x = origin.x + usable.width as i32 - size.width as i32 - margin;
+    let max_y = origin.y + usable.height as i32 - size.height as i32 - margin;
     let x = position.x.clamp(origin.x + margin, max_x.max(origin.x + margin));
     let y = position.y.clamp(origin.y + margin, max_y.max(origin.y + margin));
     if x != position.x || y != position.y {
         let _ = window.set_position(PhysicalPosition::new(x, y));
     }
+}
+
+/// 按配置算窗口的物理尺寸。夹取要用「将来」的尺寸，不能读实时尺寸：
+/// set_size 之后窗口尺寸要过一会儿才更新，读到的还是旧值，夹完仍旧会露出屏幕外。
+fn physical_window_size(window: &tauri::WebviewWindow, expanded: bool) -> tauri::PhysicalSize<u32> {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let height = if expanded { WIN_EXPANDED_H } else { WIN_COLLAPSED_H };
+    let sized = (WIN_W * scale).round() as u32;
+    let h = (height * scale).round() as u32;
+    if sized == 0 || h == 0 {
+        return window
+            .outer_size()
+            .unwrap_or(tauri::PhysicalSize::new(WIN_W as u32, WIN_COLLAPSED_H as u32));
+    }
+    tauri::PhysicalSize::new(sized, h)
 }
 
 /// 设置页现在是主窗口里的浮层：让前端把它撑开就行，不再开第二个 webview
@@ -433,6 +473,12 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
             .unwrap_or(WIN_SETTINGS_H);
         let height = WIN_SETTINGS_H.min(monitor_height - 40.0).max(520.0);
         let _ = window.set_size(tauri::LogicalSize::new(466.0, height));
+        // 用刚算出来的尺寸夹取：set_size 之后实时尺寸还没更新，读到的还是旧值
+        let settings = tauri::PhysicalSize::new(
+            (466.0 * scale).round() as u32,
+            (height * scale).round() as u32,
+        );
+        clamp_to_monitor(&window, settings);
     } else {
         let expanded = load_config(&app).expanded;
         let height = if expanded {
@@ -442,7 +488,6 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
         };
         let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
     }
-    if mode == "settings" { clamp_to_monitor(&window); }
     true
 }
 
@@ -705,7 +750,16 @@ pub fn run() {
 
             /* ---- 主窗口定位 ---- */
             if let Some(win) = app.get_webview_window("main") {
-                match load_position(app.handle()) {
+                let saved = load_position(app.handle());
+                let saved_text = match saved {
+                    Some(p) => format!("一些位置: ({}, {})", p.x, p.y),
+                    None => "没有可用的位置记录".to_string(),
+                };
+                startup_log(
+                    app.handle(),
+                    &format!("启动; 数据目录={}; {saved_text}", data_dir(app.handle()).display()),
+                );
+                match saved {
                     Some(p) => {
                         let _ = win.set_position(PhysicalPosition::new(p.x, p.y));
                     }
@@ -723,10 +777,33 @@ pub fn run() {
                     }
                 }
                 let _ = win.show();
+                // 窗口显示时系统偶尔会把它摆回默认位置：真发生了就按存档的位置再放一次。
+                if let Some(p) = saved {
+                    if let Ok(actual) = win.outer_position() {
+                        if (actual.x - p.x).abs() > 2 || (actual.y - p.y).abs() > 2 {
+                            startup_log(
+                                app.handle(),
+                                &format!(
+                                    "显示后位置被改成 ({}, {})，按存档 ({}, {}) 重新放一次",
+                                    actual.x, actual.y, p.x, p.y
+                                ),
+                            );
+                            let _ = win.set_position(PhysicalPosition::new(p.x, p.y));
+                        }
+                    }
+                }
             }
 
             apply_window_size(app.handle(), cfg.expanded);
-            if let Some(win) = app.get_webview_window("main") { clamp_to_monitor(&win); }
+            if let Some(win) = app.get_webview_window("main") {
+                clamp_to_monitor(&win, physical_window_size(&win, cfg.expanded));
+                if let Ok(final_pos) = win.outer_position() {
+                    startup_log(
+                        app.handle(),
+                        &format!("定版位置: ({}, {})", final_pos.x, final_pos.y),
+                    );
+                }
+            }
             // 透明区域穿透：只让人物和账目接住鼠标
             start_click_through(app.handle().clone());
 

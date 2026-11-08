@@ -38,17 +38,17 @@
 打开左侧“插件”，点击右上角“添加插件”，填写下方 GitHub 源并安装。
 
 ```text
-github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
+github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 ```
 
-其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.3.2` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
+其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.3.3` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
 
 安装完成后按 DSH 的提示刷新或重开界面，右侧会出现工资挂件。
 
 ### DSH Web
 
 ```sh
-dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
+dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 ```
 
 `dsh` 是 Harness 命令，`plugin` 管理插件，`--profile web` 选择 Web 运行环境，`add` 安装该 GitHub 源。命令会更新这个 profile 的插件依赖和启用列表。界面生效方式按宿主提示处理。
@@ -85,6 +85,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
 | Windows，DSH 0.2.1-rc.3 | 插件 v0.2.0 完成运行检查，v0.3.0 等待验证 |
 | Windows，DSH 0.2.1-rc.5 | 2026-11-04 完成 v0.3.0 真实运行时、客户端及 30 FPS 播放检查；2026-11-06 v0.3.1 价格表与计价修复通过单元测试，待真实运行时验证 |
 | Windows，桌面版 v0.1.1（2026-11-08） | 在本机实测：彩蛋「伸手抓抓抓」10.04 秒动画接入、收起态也能看见台词、位置原子写入后重启不跑偏、视频播放失败 60 秒自动重试。v0.3.2 插件版待真实运行时验证 |
+| Windows，桌面版 v0.1.2（2026-11-08） | 在本机实测：视频播不出来时人物隐藏、气泡收起，面板数字照常，60 秒后自动重试；动画调度改成等片尾再切；忙闲改读插件写的心跳文件。插件 v0.3.3 待真实运行时验证 |
 | DSH 0.2.1-rc.4 | 等待验证 |
 | 其他系统和版本 | 等待验证 |
 

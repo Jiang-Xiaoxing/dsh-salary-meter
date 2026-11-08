@@ -72,7 +72,13 @@ export async function apply(ctx) {
     // 已有实例（用户手动开的、或开机自启的）就复用，绝不重复开第二个。
     if ((await listWidgetProcesses(widgetExe)).length > 0) return;
     try {
-      const child = spawn(widgetExe, [], { stdio: 'ignore', windowsHide: false, cwd: dirname(widgetExe) });
+      // 把本进程号带过去：DSH 一退（哪怕是崩溃/强杀），挂件自己会退，不留在桌面上当孤儿。
+      const child = spawn(widgetExe, [], {
+        stdio: 'ignore',
+        windowsHide: false,
+        cwd: dirname(widgetExe),
+        env: { ...process.env, SALARYMETER_HOST_PID: String(process.pid) },
+      });
       widgetChild = child;
       child.on('exit', () => { if (widgetChild === child) widgetChild = null; });
       child.unref();

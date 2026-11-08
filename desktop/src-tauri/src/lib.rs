@@ -25,6 +25,92 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/* ---------------------------- 跟着 DS Bot 走 ---------------------------- */
+/* DSH 起挂件时会把宿主进程号放进 SALARYMETER_HOST_PID（跟 dsh-pet 一个路子）。
+   这里每 2 秒确认一次宿主还在，宿主没了就自己退出——DSH 崩溃或强杀时插件来不及收，
+   靠这条兜底，挂件不会孤零零留在桌面上。手动双击启动（没有这个环境变量）时不做任何事。 */
+const HOST_POLL_MS: u64 = 2000;
+
+#[cfg(target_os = "windows")]
+fn process_alive(pid: u32) -> bool {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
+        fn GetExitCodeProcess(handle: isize, code: *mut u32) -> i32;
+        fn CloseHandle(handle: isize) -> i32;
+    }
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle == 0 {
+            return false;
+        }
+        let mut code: u32 = 0;
+        let ok = GetExitCodeProcess(handle, &mut code);
+        CloseHandle(handle);
+        ok != 0 && code == STILL_ACTIVE
+    }
+}
+#[cfg(not(target_os = "windows"))]
+fn process_alive(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+/// 手动双击启动时没有环境变量：这时自己找一下 DS Bot 的主进程，找到就照样跟着它。
+#[cfg(target_os = "windows")]
+fn find_dsh_pid() -> Option<u32> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let output = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "(Get-Process -Name 'DS Bot' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).Id",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|pid| *pid > 0)
+}
+#[cfg(not(target_os = "windows"))]
+fn find_dsh_pid() -> Option<u32> {
+    None
+}
+
+fn start_host_watch(app: AppHandle) {
+    let from_env = std::env::var("SALARYMETER_HOST_PID")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u32>().ok())
+        .filter(|pid| *pid > 0);
+    std::thread::spawn(move || {
+        let host_pid = match from_env {
+            Some(pid) => pid,
+            None => match find_dsh_pid() {
+                Some(pid) => pid,
+                None => return, // DS Bot 没开：不跟任何人，行为跟以前一样
+            },
+        };
+        startup_log(&app, &format!("跟随宿主进程 {host_pid}，它退出我就退出"));
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(HOST_POLL_MS));
+            if process_alive(host_pid) {
+                continue;
+            }
+            startup_log(&app, &format!("宿主进程 {host_pid} 不在了，挂件自己退出"));
+            app.exit(0);
+            // 万一 exit 被卡住，2 秒后硬退，绝不留一个孤儿窗口
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            std::process::exit(0);
+        }
+    });
+}
+
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
@@ -805,6 +891,7 @@ pub fn run() {
                 }
             }
             // 透明区域穿透：只让人物和账目接住鼠标
+            start_host_watch(app.handle().clone());
             start_click_through(app.handle().clone());
 
             // 调试用：SALARYMETER_OPEN_SETTINGS=1 时启动直接打开设置窗口，方便截图核对

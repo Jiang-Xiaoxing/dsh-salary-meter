@@ -4,9 +4,11 @@
 
 > 想让它浮在桌面任意位置（不在 DSH 窗口里）？用同一仓库里的桌面版：[desktop](desktop/README.md)，预编译的安装包在桌面版 Release 里：[下载](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/latest)。
 
-![鲸鱼娘的九个关键姿态](assets/whale-girl-actions.png)
+![桌面版的十二段人物动画](docs/images/desktop-actions.png)
 
-## 使用效果
+上面是桌面版现在的十二段透明 WebM 动画（十种场景，午休和休息日各轮播两段），按工资状态和模型忙闲自动切换；插件版在 DSH 窗口里用的是图集动画，见下文。
+
+## 使用效果（插件版 · DSH 窗口内）
 
 | 深色 | 浅色 |
 | --- | --- |
@@ -96,10 +98,20 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
 
 客户端通过 DSH 自带的已鉴权接口读取数据，插件通过监听会话事件计算饭钱。停用或卸载在 DSH 的插件页操作。卸载后可自行清理上述数据目录。
 
-## 图片与鸣谢
+## 图片与素材来源
 
-角色立绘与九姿态动作素材根据社区“大肥鱼”鲸鱼娘形象，使用内置生图工具生成。动画在吃饭过程中穿插偷瞄、护碗、擦嘴、满足和打盹。
+**桌面版的十二段透明 WebM 动画**（就是上面那张总览图）：
 
-角色参考包括《吃白饭的大肥鱼》《蓝色大肥鱼表情包》《家里来了个吃白饭的大肥鱼》等二创，感谢社区创作者的形象和表达。插件介绍结构参考 dsh-pet 和 dsh-sidebar-qa。[吃白饭的大肥鱼](https://www.bilibili.com/video/BV1JFtZ6iEpt/)、[蓝色大肥鱼表情包](https://www.bilibili.com/video/BV1V88G6TEvg/)、[家里来了个吃白饭的大肥鱼](https://www.bilibili.com/video/BV1bXHW66Es5/)、[dsh-pet](https://github.com/PC2005-cloud/dsh-pet)、[dsh-sidebar-qa](https://github.com/ChenRuoT/dsh-sidebar-qa)
+| 素材 | 来源 | 许可 |
+| --- | --- | --- |
+| 大口吃零食、忙起来扒两口、偷吃被抓住、午休涮火锅、趴着睡一会儿、收工蹦一个、晨间刷牙、悠闲哼歌、开黑打游戏、待机发呆 | [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的 `assets/webm`，仓库里是原样使用的 | MIT，全文见 [`LICENSE-dsh-pet`](LICENSE-dsh-pet) |
+| 加班熬夜 | 按 dsh-pet 公开的抠图流程自己做的一段（绿幕抠像 → 站位归一化 → 转透明 VP9），不是原作者提供的动画 | 本项目自制，随 MIT |
+| 伸手抓抓抓（彩蛋） | AI 生成绿幕视频后走同一套流程转透明，2026-11-08 加入 | 本项目自制，随 MIT |
+
+**插件版的图集人物**（DSH 窗口里那套静态九姿态，WebGL 插值）：立绘按社区“大肥鱼”鲸鱼娘形象用内置生图工具自制，不是从 dsh-pet 拿的素材；它现在也只在桌面版的视频播不出来时作兜底。
+
+形象参考包括《吃白饭的大肥鱼》《蓝色大肥鱼表情包》《家里来了个吃白饭的大肥鱼》等二创，感谢社区创作者的形象和表达。插件介绍结构参考 dsh-pet 和 dsh-sidebar-qa。[吃白饭的大肥鱼](https://www.bilibili.com/video/BV1JFtZ6iEpt/)、[蓝色大肥鱼表情包](https://www.bilibili.com/video/BV1V88G6TEvg/)、[家里来了个吃白饭的大肥鱼](https://www.bilibili.com/video/BV1bXHW66Es5/)、[dsh-pet](https://github.com/PC2005-cloud/dsh-pet)、[dsh-sidebar-qa](https://github.com/ChenRuoT/dsh-sidebar-qa)
+
+界面截图来自 DSH 0.2.1-rc.5 的实际客户端，时钟设为工作日 15:30，月薪用默认 5,000 元，费用用合成 token 记录。
 
 代码使用 MIT 许可证。

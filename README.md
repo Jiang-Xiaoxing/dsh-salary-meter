@@ -2,7 +2,7 @@
 
 **DSH（DeepSeek Harness）社区插件**，用一条小工资条显示实时工资、当前时间、下班倒计时和模型饭钱估算，展开后可以看到抱着白米饭吃个不停的蓝毛鲸鱼娘。
 
-> 想让它浮在桌面任意位置（不在 DSH 窗口里）？用同一仓库里的桌面版：[desktop](desktop/README.md)。
+> 想让它浮在桌面任意位置（不在 DSH 窗口里）？用同一仓库里的桌面版：[desktop](desktop/README.md)，预编译的安装包在桌面版 Release 里：[下载](../../releases/latest)。
 
 ![鲸鱼娘的九个关键姿态](assets/whale-girl-actions.png)
 
@@ -36,17 +36,17 @@
 打开左侧“插件”，点击右上角“添加插件”，填写下方 GitHub 源并安装。
 
 ```text
-github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.1
+github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
 ```
 
-其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.3.1` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
+其中 `github:` 表示从 GitHub 仓库获取插件，`Jiang-Xiaoxing/dsh-salary-meter` 是仓库名，`#v0.3.2` 固定安装本次发布版本。DSH 会下载插件代码及图片，并把插件加入当前运行环境。
 
 安装完成后按 DSH 的提示刷新或重开界面，右侧会出现工资挂件。
 
 ### DSH Web
 
 ```sh
-dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.1
+dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.2
 ```
 
 `dsh` 是 Harness 命令，`plugin` 管理插件，`--profile web` 选择 Web 运行环境，`add` 安装该 GitHub 源。命令会更新这个 profile 的插件依赖和启用列表。界面生效方式按宿主提示处理。
@@ -82,6 +82,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.1
 | --- | --- |
 | Windows，DSH 0.2.1-rc.3 | 插件 v0.2.0 完成运行检查，v0.3.0 等待验证 |
 | Windows，DSH 0.2.1-rc.5 | 2026-11-04 完成 v0.3.0 真实运行时、客户端及 30 FPS 播放检查；2026-11-06 v0.3.1 价格表与计价修复通过单元测试，待真实运行时验证 |
+| Windows，桌面版 v0.1.1（2026-11-08） | 在本机实测：彩蛋「伸手抓抓抓」10.04 秒动画接入、收起态也能看见台词、位置原子写入后重启不跑偏、视频播放失败 60 秒自动重试。v0.3.2 插件版待真实运行时验证 |
 | DSH 0.2.1-rc.4 | 等待验证 |
 | 其他系统和版本 | 等待验证 |
 

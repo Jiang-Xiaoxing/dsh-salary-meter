@@ -80,6 +80,24 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     openSettings: function () {},
   };
 
+  /* 运行日志：写到数据目录的 renderer.log，出问题时能回看现场。
+     同样的内容 1 秒内只记一次，免得 100ms 的轮询把日志刷爆。 */
+  let lastLogText = '';
+  let lastLogAt = -Infinity;
+  function logLine(message) {
+    try {
+      const now = performance.now();
+      if (message === lastLogText && now - lastLogAt < 1000) return;
+      lastLogText = message;
+      lastLogAt = now;
+      if (api.log) api.log(message);
+    } catch (error) {}
+  }
+
+  function shownVideos() {
+    return el.videos.filter(video => video.dataset.on === 'true');
+  }
+
   let cfg = Object.assign({}, DEF);
   let today = { expense: 0, known: 0, unknown: 0 };
   let expanded = false;
@@ -689,6 +707,15 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     playingEl = null;
     sceneCurrent = null;
     sceneName = null;
+    /* 重启人物时先把两个播放器都关掉、停住。
+       以前只清 playingEl，另一个留在 data-on=true 上；它播到片尾时因为
+       「不是当前层」被 onClipEnded 忽略，就停在最后一帧，变成一张静态图
+       盖在新动画前面（2026-11-09 用户录屏「动画外面蒙上一张静态图片」）。 */
+    for (const video of el.videos) {
+      video.dataset.on = 'false';
+      try { video.pause(); } catch (error) {}
+    }
+    logLine('人物启动');
     requestScene(currentScene(), gamingAllowed(), true);
   }
 
@@ -712,6 +739,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       video.pause();
       video.dataset.on = 'false';
     }
+    logLine('停掉所有视频');
   }
 
   /* 场景调度：想播的和正在播的分开。
@@ -748,8 +776,13 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   // 片尾：有目标就切，没有就重播这一段
   function onClipEnded(video) {
-    if (video !== playingEl) return;
+    if (video !== playingEl) {
+      // 不是当前层还播到了片尾，说明它没被关干净；它会停在最后一帧变成静态图
+      logLine('WARN 片尾 ' + video.id + ' 不是当前层(当前=' + (playingEl ? playingEl.id : '无') + ')，停在最后一帧');
+      return;
+    }
     const plan = decideAfterClipEnded(pendingClip);
+    logLine('片尾 ' + video.id + (plan.start ? ' 切 ' + plan.start.key : plan.restart ? ' 重播本段' : ' 停住'));
     if (plan.start) { startClip(plan.start, gamingAllowed()); return; }
     if (!plan.restart) return;
     try { video.currentTime = 0; video.play().catch(() => {}); } catch (error) { videoFailed(); }
@@ -767,10 +800,17 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const next = videos[nextIndex];
     const myAttempt = ++sceneAttempt;
     const src = `assets/webm/${sceneFileName(target.scene, target.turn)}`;
+    logLine('切片段 ' + target.key + ' -> ' + next.id + ' (' + src + ')');
     const show = () => {
       if (sceneAttempt !== myAttempt) return;
-      if (previous && previous !== next) previous.dataset.on = 'false';
-      next.dataset.on = 'true';
+      /* 统一收敛：不管上一次是哪个层、playingEl 有没有被清空，
+         显示这一帧时只允许 next 是可见的。以前只关 previous 一个，
+         previous 为 null 时旧层就永远开着，两层叠着显示。 */
+      const before = shownVideos();
+      for (const video of el.videos) video.dataset.on = video === next ? 'true' : 'false';
+      if (before.length > 1) {
+        logLine('WARN 显示前有 ' + before.length + ' 个视频层同时可见(' + before.map(v => v.id).join(',') + ')，已收敛到 ' + next.id);
+      }
       activeVideo = nextIndex;
       playingEl = next;
       const previousScene = playingClip ? playingClip.scene : null;
@@ -778,6 +818,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       sceneCurrent = target.key;
       sceneName = target.scene;
       sceneTurn = target.turn;
+      logLine('显示 ' + next.id + ' ' + target.key + ' 可见数=' + shownVideos().length);
       // 只有真正播出来才算「进入这个场景」，这时才轮到下一段
       // 只有真正播出来才算「进入这个场景」，这时才轮到下一段
       if (previousScene !== target.scene) {
@@ -828,6 +869,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   function videoFailed() {
     // 不永久放弃：人物先隐藏（不拿图集顶），60 秒后再试视频，成功就自动回来
+    logLine('视频失败，人物隐藏，60 秒后重试');
     videoRetryAt = performance.now() + VIDEO_RETRY_MS;
     stopVideos();
     syncCharacterVisibility();

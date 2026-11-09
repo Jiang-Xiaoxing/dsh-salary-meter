@@ -39,6 +39,10 @@
     userIdle: function () {
       return invoke('user_idle_ms');
     },
+    // 运行日志：切片段、视频失败、两个视频层同时显示，这类现场写到数据目录的 renderer.log
+    log: function (message) {
+      return invoke('log_event', { message: String(message) });
+    },
     onOpenSettings: function (cb) {
       listen('open-settings', function () { cb(); });
     },

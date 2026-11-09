@@ -101,7 +101,16 @@ app.whenReady().then(async () => {
     const afterBurstLogs = await logs();
     const thawCount = afterBurstLogs.filter(l => l.startsWith('扣钱结束')).length - beforeBurst;
     assert.ok(thawCount >= 1, `连续扣费 13 秒里应该至少因 10 秒上限解冻一次，实际 ${thawCount} 次`);
-    console.log(`连续扣费：新增解冻 ${thawCount} 次`);
+    // 光看「解冻过一次」不够：安静期到期也会解冻。要确认最后这一波是冻满 10 秒才解的
+    const stamp = line => Number((String(line).match(/t=(\d+)/) || [])[1]);
+    const freezeLines = afterBurstLogs.filter(l => l.startsWith('扣钱冻结'));
+    const thawLines = afterBurstLogs.filter(l => l.startsWith('扣钱结束'));
+    const lastFreezeT = stamp(freezeLines[freezeLines.length - 1]);
+    const lastThawT = stamp(thawLines[thawLines.length - 1]);
+    assert.ok(Number.isFinite(lastFreezeT) && Number.isFinite(lastThawT), '日志里应该有 t= 时间戳');
+    assert.ok(lastThawT - lastFreezeT >= 9500,
+      `连续扣费时应该是 10 秒上限解冻，实际只冻了 ${lastThawT - lastFreezeT}ms`);
+    console.log(`连续扣费：新增解冻 ${thawCount} 次，最后一波冻了 ${lastThawT - lastFreezeT}ms（上限 10 秒）`);
 
     const moneyLogs = afterBurstLogs.filter(l => l.includes('扣钱'));
     assert.ok(moneyLogs.some(l => l.startsWith('扣钱冻结')), '日志里应该有「扣钱冻结」');

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "挂件与设置窗口的默认权限",
   "windows": ["main", "settings", "settlement"],
-  "permissions": ["core:default", "core:window:allow-start-dragging"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-close"]
 }

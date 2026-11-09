@@ -804,7 +804,7 @@ pub fn run() {
             ),
         })
         .invoke_handler(tauri::generate_handler![
-            settlement::poll_settlement, settlement::settlement_bill, settlement::dismiss_settlement,
+            settlement::poll_settlement, settlement::settlement_bill, settlement::dismiss_settlement, settlement::hide_settlement,
             get_config,
             set_config,get_state,
             recompute_today,

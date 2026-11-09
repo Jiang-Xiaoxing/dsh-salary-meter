@@ -113,6 +113,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   const sceneTurns = Object.create(null); // 每个场景下一段该播第几段
   let activeVideo = 0;
   let sceneAttempt = 0;
+  // 人物第一次真正启动之前，paint 不去碰播放器。否则启动时 paint 播一次、
+  // 首次 refresh 的 applyCharacter 又播一次，两个入口各来一遍（画面会闪，也更容易叠层）
+  let characterStarted = false;
   let videoTimer = null;
   let videoGuard = null;
   /* 场景调度：想播的和正在播的分开，普通变化等这一段播完再切。
@@ -259,6 +262,16 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   let lastDay = '';
   let basisReady = false;
   let lastAnimAt = 0;
+
+  /* 扣钱冻结：扣钱那一下把数字定住、保持红色；连续一小段时间没有新扣费就算这波结束，
+     把这期间涨的工资一次性补回来（一直有新扣费也最多冻 10 秒，免得看着像卡死）。
+     用户 2026-11-09 定：扣钱变红没问题，但别马上又变绿跳上去。 */
+  let holdAmount = null;      // 冻住时显示的值；null = 没冻
+  let holdStartAt = 0;        // 这次冻结开始的时间（performance.now）
+  let holdRedoAt = 0;         // 到这个时刻还没新扣费就解除
+  let lastRealAmount = null;  // 上一帧的真实余粮，用来发现「又扣了一笔」
+  const HOLD_QUIET_MS = 2600; // 这么久没有新扣费 = 这一波结束
+  const HOLD_MAX_MS = 10000;  // 连续扣费也别冻超过 10 秒
 
   function clearMoneyFx() {
     clearTimeout(flashTimer);
@@ -567,7 +580,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const now = new Date();
     const wage = computeWage(now);
     const partial = today.unknown > 0;
-    const amount = wage.earned - today.expense;
+    const realAmount = wage.earned - today.expense;
 
     // 跨天（含隔夜休眠醒来）：工资归零是规则不是扣钱。每次都查，不能只在金额变化时查
     const dayKey = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
@@ -575,8 +588,34 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       lastDay = dayKey;
       lastAmount = null;
       greenMark = null;
+      holdAmount = null;
+      lastRealAmount = null;
       clearMoneyFx();
     }
+
+    // 扣钱冻结：真实余粮往下掉（也就是又扣了一笔）就当场冻住；
+    // 连续 HOLD_QUIET_MS 没再往下掉 = 这波扣完，解冻并把涨的钱一次补回来。
+    const nowP = performance.now();
+    if (lastRealAmount !== null && realAmount < lastRealAmount - 0.005) {
+      const wasFrozen = holdAmount !== null;
+      holdAmount = realAmount;
+      holdStartAt = nowP;
+      holdRedoAt = nowP + HOLD_QUIET_MS;
+      logLine((wasFrozen ? '又扣一笔，继续冻' : '扣钱冻结') + ' 金额=¥' + money(Math.abs(holdAmount)) + ' 真实=¥' + money(realAmount) + ' t=' + Math.round(nowP));
+    }
+    lastRealAmount = realAmount;
+    const frozen = holdAmount !== null && nowP - holdStartAt < HOLD_MAX_MS && nowP < holdRedoAt;
+    if (!frozen && holdAmount !== null) {
+      const caught = realAmount - holdAmount;
+      holdAmount = null; // 这波扣完：显示跳回真实金额，涨的钱一次补上
+      if (caught > 0.0005) {
+        greenMark = realAmount;
+        bigFlash('up', 1600); // 补回来的时候闪一下绿，别让人以为数字自己蹦了
+      }
+      logLine('扣钱结束，解冻补回 ¥' + money(Math.max(0, caught)) + ' 真实=¥' + money(realAmount) + ' t=' + Math.round(nowP));
+    }
+    // 冻住时显示层停在扣钱后的数；解冻后跟上真实金额
+    const amount = frozen ? holdAmount : realAmount;
 
     el.widget.dataset.rest = String(wage.rest);
     el.statusTitle.textContent = wage.rest ? '今天休息' : '今日账目';
@@ -593,6 +632,13 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const text = egg ? '0.00' : (negative ? "−" : "") + money(Math.abs(amount));
     // 统计有遗漏时，实际余粮不大于当前估算；彩蛋期间不显示「≤」，免得出现 ≤¥0.00
     el.prefix.textContent = egg ? '' : partial ? '≤' : '';
+    if (frozen) {
+      // 冻住期间一直红着，别被普通涨钱的绿色闪一下盖掉
+      clearTimeout(flashTimer);
+      flashTimer = 0;
+      el.balance.classList.remove('up');
+      el.balance.classList.add('down');
+    }
     const changed = renderedAmount !== text;
     if (changed) {
       if (!egg && lastAmount !== null) noteChange(amount - lastAmount);
@@ -621,7 +667,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
     {
-      if (useVideo()) {
+      if (useVideo() && characterStarted) {
         const allowGaming = gamingAllowed();
         const caught = performance.now() < caughtUntil;
         const scene = pickScene({
@@ -716,6 +762,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       try { video.pause(); } catch (error) {}
     }
     logLine('人物启动');
+    characterStarted = true;
     requestScene(currentScene(), gamingAllowed(), true);
   }
 
@@ -999,6 +1046,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
           basisReady = true;
           lastAmount = null;
           greenMark = null;
+          // 真实花费到位的这一下，余粮会从「工资全额」掉到「工资−花费」，那不是扣钱
+          lastRealAmount = null;
         }
         if (today.expense > lastExpense + 1e-9) busyUntil = Date.now() + 5000;
         lastExpense = today.expense;

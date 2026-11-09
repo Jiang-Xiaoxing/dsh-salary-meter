@@ -1,4 +1,5 @@
 mod ledger;
+mod settlement;
 
 use std::fs;
 use std::path::PathBuf;
@@ -217,6 +218,11 @@ struct TrayHandles {
 }
 
 fn data_dir(app: &AppHandle) -> PathBuf {
+    // 原生验收使用独立目录，避免测试账单污染真实配置和已读记录。
+    if let Some(path) = std::env::var_os("SALARYMETER_TEST_DATA") {
+        let path = PathBuf::from(path);
+        if path.is_absolute() { return path; }
+    }
     app.path()
         .app_config_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
@@ -798,6 +804,7 @@ pub fn run() {
             ),
         })
         .invoke_handler(tauri::generate_handler![
+            settlement::poll_settlement, settlement::settlement_bill, settlement::dismiss_settlement,
             get_config,
             set_config,get_state,
             recompute_today,

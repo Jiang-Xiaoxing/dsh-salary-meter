@@ -1,4 +1,5 @@
 mod ledger;
+mod settlement;
 
 use std::fs;
 use std::path::PathBuf;
@@ -217,6 +218,11 @@ struct TrayHandles {
 }
 
 fn data_dir(app: &AppHandle) -> PathBuf {
+    // 原生验收使用独立目录，避免测试账单污染真实配置和已读记录。
+    if let Some(path) = std::env::var_os("SALARYMETER_TEST_DATA") {
+        let path = PathBuf::from(path);
+        if path.is_absolute() { return path; }
+    }
     app.path()
         .app_config_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
@@ -329,6 +335,47 @@ fn startup_log(app: &AppHandle, message: &str) {
     if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(file, "{ms} {message}");
     }
+}
+
+/// 运行时日志：动画切到哪一段、视频有没有失败、有没有两个视频层同时显示，
+/// 都记在这里，出问题能回看现场（2026-11-09 用户截图里冒出「静态图片」时，
+/// 手上只有启动日志，查不到那一刻发生了什么）。
+/// 超过 200KB 就截到只剩最后 100KB，从换行处切，别把一行劈开。
+fn runtime_log(app: &AppHandle, message: &str) {
+    use std::io::Write;
+    let dir = data_dir(app);
+    let path = dir.join("renderer.log");
+    if let Ok(meta) = fs::metadata(&path) {
+        if meta.len() > 200 * 1024 {
+            if let Ok(bytes) = fs::read(&path) {
+                let keep = bytes.len().saturating_sub(100 * 1024);
+                let start = bytes[keep..]
+                    .iter()
+                    .position(|&b| b == b'\n')
+                    .map(|i| keep + i + 1)
+                    .unwrap_or(keep);
+                let _ = fs::write(&path, &bytes[start..]);
+            }
+        }
+    }
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{ms} {message}");
+    }
+}
+
+/// 渲染进程写一行日志。参数长度兜个底，防止误传大段文本把日志撑爆。
+#[tauri::command]
+fn log_event(app: AppHandle, message: String) {
+    let trimmed = message.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let line: String = trimmed.chars().take(400).collect();
+    runtime_log(&app, &line);
 }
 
 /* ---------------------------------------------------------------- 偷吃 */
@@ -757,6 +804,7 @@ pub fn run() {
             ),
         })
         .invoke_handler(tauri::generate_handler![
+            settlement::poll_settlement, settlement::settlement_bill, settlement::dismiss_settlement,
             get_config,
             set_config,get_state,
             recompute_today,
@@ -767,7 +815,8 @@ pub fn run() {
             set_dragging,
             start_pet_drag,
             set_hit_regions,
-            user_idle_ms
+            user_idle_ms,
+            log_event
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());

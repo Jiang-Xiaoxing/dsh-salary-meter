@@ -80,6 +80,26 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     openSettings: function () {},
   };
 
+  /* 运行日志：写到数据目录的 renderer.log，出问题时能回看现场。
+     同样的内容 1 秒内只记一次，免得 100ms 的轮询把日志刷爆。 */
+  let lastLogText = '';
+  let lastLogAt = -Infinity;
+  function logLine(message) {
+    try {
+      const now = performance.now();
+      if (message === lastLogText && now - lastLogAt < 1000) return;
+      lastLogText = message;
+      lastLogAt = now;
+      // api.log 返回 Promise，拒绝不能靠外面这层同步 try/catch 接住
+      const sent = api.log ? api.log(message) : null;
+      if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+    } catch (error) {}
+  }
+
+  function shownVideos() {
+    return el.videos.filter(video => video.dataset.on === 'true');
+  }
+
   let cfg = Object.assign({}, DEF);
   let today = { expense: 0, known: 0, unknown: 0 };
   let expanded = false;
@@ -95,6 +115,12 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   const sceneTurns = Object.create(null); // 每个场景下一段该播第几段
   let activeVideo = 0;
   let sceneAttempt = 0;
+  // 人物第一次真正启动之前，paint 不去碰播放器。否则启动时 paint 播一次、
+  // 首次 refresh 的 applyCharacter 又播一次，两个入口各来一遍（画面会闪，也更容易叠层）
+  let characterStarted = false;
+  // 正在加载的那一段：加载慢的时候 100ms 轮询会反复 startClip，把 currentTime 一次次归零
+  let loadingKey = null;
+  let loadingSrc = null;
   let videoTimer = null;
   let videoGuard = null;
   /* 场景调度：想播的和正在播的分开，普通变化等这一段播完再切。
@@ -241,6 +267,19 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   let lastDay = '';
   let basisReady = false;
   let lastAnimAt = 0;
+
+  /* 扣钱冻结：扣钱那一下把数字定住、保持红色；连续一小段时间没有新扣费就算这波结束，
+     把这期间涨的工资一次性补回来（一直有新扣费也最多冻 10 秒，免得看着像卡死）。
+     用户 2026-11-09 定：扣钱变红没问题，但别马上又变绿跳上去。 */
+  let holdAmount = null;      // 冻住时显示的值；null = 没冻
+  let holdStartAt = 0;        // 这一波第一次扣钱的时间（只在首次设，10 秒上限才有意义）
+  let holdQuietUntil = 0;     // 安静到这个时刻：期间没有新扣费就算这波结束
+  let holdHandledAt = 0;      // 已经处理到哪一次扣费信号
+  let expensePulseAt = 0;     // refresh 发现「今天花费涨了」的时刻
+  /* 安静期要比 refresh 周期（3 秒）长：否则费用还没读下一次就先解冻，
+     连续扣费时会「补一点又红」来回跳（Codex 审查第 1 条）。 */
+  const HOLD_QUIET_MS = 3600;
+  const HOLD_MAX_MS = 10000;  // 连续扣费也别冻超过 10 秒
 
   function clearMoneyFx() {
     clearTimeout(flashTimer);
@@ -549,7 +588,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const now = new Date();
     const wage = computeWage(now);
     const partial = today.unknown > 0;
-    const amount = wage.earned - today.expense;
+    const realAmount = wage.earned - today.expense;
 
     // 跨天（含隔夜休眠醒来）：工资归零是规则不是扣钱。每次都查，不能只在金额变化时查
     const dayKey = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
@@ -557,8 +596,40 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       lastDay = dayKey;
       lastAmount = null;
       greenMark = null;
+      holdAmount = null;
+      holdStartAt = 0;
+      holdQuietUntil = 0;
+      holdHandledAt = 0;
+      expensePulseAt = 0;
       clearMoneyFx();
     }
+
+    // 扣钱冻结：refresh 发现「今天花费涨了」就冻住显示；这波安静下来再按真实金额走。
+    // 用花费差而不是「余额跌」来识别：改工资参数、账本重算都不会被误当成扣钱（Codex 审查第 4 条）。
+    const nowP = performance.now();
+    if (expensePulseAt > holdHandledAt) {
+      holdHandledAt = expensePulseAt;
+      const wasFrozen = holdAmount !== null;
+      if (!wasFrozen) holdStartAt = nowP;
+      holdAmount = realAmount;
+      holdQuietUntil = nowP + HOLD_QUIET_MS;
+      logLine((wasFrozen ? '又扣一笔，继续冻' : '扣钱冻结') + ' 金额=¥' + money(Math.abs(holdAmount)) + ' t=' + Math.round(nowP));
+    }
+    const frozen = holdAmount !== null && nowP - holdStartAt < HOLD_MAX_MS && nowP < holdQuietUntil;
+    if (!frozen && holdAmount !== null) {
+      const caught = realAmount - holdAmount;
+      holdAmount = null; // 这波扣完：显示跳回真实金额，涨的钱一次补上
+      // 不管有没有补差，都要把冻结时的红色清掉：休息日、午休、下班后工资不涨，
+      // 只会在 caught<=0 时不闪绿，红色就永远留着了（Codex 审查第 3 条）
+      el.balance.classList.remove('down');
+      if (caught > 0.0005) {
+        greenMark = realAmount;
+        bigFlash('up', 1600); // 补回来的时候闪一下绿，别让人以为数字自己蹦了
+      }
+      logLine('扣钱结束，解冻补回 ¥' + money(Math.max(0, caught)) + ' 真实=¥' + money(realAmount) + ' t=' + Math.round(nowP));
+    }
+    // 冻住时显示层停在扣钱后的数；解冻后跟上真实金额
+    const amount = frozen ? holdAmount : realAmount;
 
     el.widget.dataset.rest = String(wage.rest);
     el.statusTitle.textContent = wage.rest ? '今天休息' : '今日账目';
@@ -575,6 +646,13 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const text = egg ? '0.00' : (negative ? "−" : "") + money(Math.abs(amount));
     // 统计有遗漏时，实际余粮不大于当前估算；彩蛋期间不显示「≤」，免得出现 ≤¥0.00
     el.prefix.textContent = egg ? '' : partial ? '≤' : '';
+    if (frozen) {
+      // 冻住期间一直红着，别被普通涨钱的绿色闪一下盖掉
+      clearTimeout(flashTimer);
+      flashTimer = 0;
+      el.balance.classList.remove('up');
+      el.balance.classList.add('down');
+    }
     const changed = renderedAmount !== text;
     if (changed) {
       if (!egg && lastAmount !== null) noteChange(amount - lastAmount);
@@ -603,7 +681,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
     {
-      if (useVideo()) {
+      if (useVideo() && characterStarted) {
         const allowGaming = gamingAllowed();
         const caught = performance.now() < caughtUntil;
         const scene = pickScene({
@@ -689,6 +767,16 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     playingEl = null;
     sceneCurrent = null;
     sceneName = null;
+    /* 重启人物时先把两个播放器都关掉、停住。
+       以前只清 playingEl，另一个留在 data-on=true 上；它播到片尾时因为
+       「不是当前层」被 onClipEnded 忽略，就停在最后一帧，变成一张静态图
+       盖在新动画前面（2026-11-09 用户录屏「动画外面蒙上一张静态图片」）。 */
+    for (const video of el.videos) {
+      video.dataset.on = 'false';
+      try { video.pause(); } catch (error) {}
+    }
+    logLine('人物启动');
+    characterStarted = true;
     requestScene(currentScene(), gamingAllowed(), true);
   }
 
@@ -708,10 +796,13 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     playingClip = null;
     pendingClip = null;
     playingEl = null;
+    loadingKey = null;
+    loadingSrc = null;
     for (const video of el.videos) {
       video.pause();
       video.dataset.on = 'false';
     }
+    logLine('停掉所有视频');
   }
 
   /* 场景调度：想播的和正在播的分开。
@@ -748,8 +839,13 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   // 片尾：有目标就切，没有就重播这一段
   function onClipEnded(video) {
-    if (video !== playingEl) return;
+    if (video !== playingEl) {
+      // 不是当前层还播到了片尾，说明它没被关干净；它会停在最后一帧变成静态图
+      logLine('WARN 片尾 ' + video.id + ' 不是当前层(当前=' + (playingEl ? playingEl.id : '无') + ')，停在最后一帧');
+      return;
+    }
     const plan = decideAfterClipEnded(pendingClip);
+    logLine('片尾 ' + video.id + (plan.start ? ' 切 ' + plan.start.key : plan.restart ? ' 重播本段' : ' 停住'));
     if (plan.start) { startClip(plan.start, gamingAllowed()); return; }
     if (!plan.restart) return;
     try { video.currentTime = 0; video.play().catch(() => {}); } catch (error) { videoFailed(); }
@@ -765,12 +861,28 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const previous = playingEl;
     const nextIndex = activeVideo === 0 ? 1 : 0;
     const next = videos[nextIndex];
-    const myAttempt = ++sceneAttempt;
     const src = `assets/webm/${sceneFileName(target.scene, target.turn)}`;
+    // 同一段还在加载就等它，别反复 startClip 把 currentTime 归零（加载慢时 100ms 轮询会一直打断）
+    if (loadingKey === target.key && loadingSrc === src) return;
+    loadingKey = target.key;
+    loadingSrc = src;
+    const myAttempt = ++sceneAttempt;
+    logLine('切片段 ' + target.key + ' -> ' + next.id + ' (' + src + ')');
     const show = () => {
       if (sceneAttempt !== myAttempt) return;
-      if (previous && previous !== next) previous.dataset.on = 'false';
-      next.dataset.on = 'true';
+      // 播出来了才撤掉 4 秒保护：不能像以前那样在 play() 之前就撤，
+      // 否则 play() 的 Promise 一直 pending 时没人兜底，loading 状态就永远卡住
+      clearTimeout(videoGuard);
+      loadingKey = null;
+      loadingSrc = null;
+      /* 统一收敛：不管上一次是哪个层、playingEl 有没有被清空，
+         显示这一帧时只允许 next 是可见的。以前只关 previous 一个，
+         previous 为 null 时旧层就永远开着，两层叠着显示。 */
+      const before = shownVideos();
+      for (const video of el.videos) video.dataset.on = video === next ? 'true' : 'false';
+      if (before.length > 1) {
+        logLine('WARN 显示前有 ' + before.length + ' 个视频层同时可见(' + before.map(v => v.id).join(',') + ')，已收敛到 ' + next.id);
+      }
       activeVideo = nextIndex;
       playingEl = next;
       const previousScene = playingClip ? playingClip.scene : null;
@@ -778,6 +890,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       sceneCurrent = target.key;
       sceneName = target.scene;
       sceneTurn = target.turn;
+      logLine('显示 ' + next.id + ' ' + target.key + ' 可见数=' + shownVideos().length);
       // 只有真正播出来才算「进入这个场景」，这时才轮到下一段
       // 只有真正播出来才算「进入这个场景」，这时才轮到下一段
       if (previousScene !== target.scene) {
@@ -792,7 +905,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     };
     const play = () => {
       if (sceneAttempt !== myAttempt) return;
-      clearTimeout(videoGuard);
       // 系统开了「减少动态效果」就停在第一帧
       const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
       next.currentTime = 0;
@@ -828,6 +940,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   function videoFailed() {
     // 不永久放弃：人物先隐藏（不拿图集顶），60 秒后再试视频，成功就自动回来
+    logLine('视频失败，人物隐藏，60 秒后重试');
+    loadingKey = null;
+    loadingSrc = null;
     videoRetryAt = performance.now() + VIDEO_RETRY_MS;
     stopVideos();
     syncCharacterVisibility();
@@ -952,13 +1067,19 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
         if (api.userIdle) {
           api.userIdle().then(ms => { userIdleMs = Number(ms) || 0; }).catch(() => {});
         }
+        // 首次拿到的是今天累计花费的基线，不是「刚扣了一笔」
+        const firstBasis = !basisReady;
         if (!basisReady) {
           // 首屏 paint 用的是默认配置，等真实数据到了再重建基准，否则会被当成一次涨跌
           basisReady = true;
           lastAmount = null;
           greenMark = null;
         }
-        if (today.expense > lastExpense + 1e-9) busyUntil = Date.now() + 5000;
+        if (today.expense > lastExpense + 1e-9) {
+          busyUntil = Date.now() + 5000;
+          // 花费涨了 = 真扣了一笔，交给 paint 去冻住（比看余额跌准，改工资参数不会误判）
+          if (!firstBasis) expensePulseAt = performance.now();
+        }
         lastExpense = today.expense;
         applyTheme();
         if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }

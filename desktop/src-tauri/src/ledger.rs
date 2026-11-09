@@ -447,7 +447,9 @@ pub struct ScanReport {
 
 /// 扫今天所有会话日志，返回今日花费。未变化的文件直接复用上次结果。
 pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanReport {
-    let now = now_ms();
+    scan_at(prices, cache, home, now_ms())
+}
+pub fn scan_at(prices: &Prices, cache: &mut ScanCache, home: &Path, now: i64) -> ScanReport {
     let day = beijing_day(now);
     if cache.day != day {
         cache.clear();
@@ -530,6 +532,9 @@ mod tps_tests {
         let path = std::env::temp_dir().join(format!("salary-hour-{}.zstd", std::process::id()));
         fs::write(&path, zstd::stream::encode_all(lines.join("\n").as_bytes(), 0).unwrap()).unwrap();
         let mut totals = scan_file(&path, &load_prices(None), &beijing_day(now));
+        let yesterday = scan_file(&path, &load_prices(None), &beijing_day(now-2000));
+        assert_eq!(yesterday.known, 1);
+        assert!((yesterday.expense - 800.0 * 8.0 / 1_000_000.0 * 0.5).abs() < 1e-10);
         fs::remove_file(path).unwrap();
         totals.refresh_hour(now);
         assert_eq!(totals.hour_out, 1000);
@@ -548,5 +553,3 @@ mod tps_tests {
             report.today.hour_out, report.today.hour_dur_ms, report.today.tps());
     }
 }
-
-

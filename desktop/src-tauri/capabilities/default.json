@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "挂件与设置窗口的默认权限",
-  "windows": ["main", "settings"],
+  "windows": ["main", "settings", "settlement"],
   "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

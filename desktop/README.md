@@ -1,84 +1,130 @@
-# SalaryMeter · 桌面工资挂件
+# SalaryMeter · Windows 桌面工资挂件
 
-打工养肥鱼。一个浮在桌面上的小胶囊：今天挣了多少、离下班还有多久、AI 又吃了多少钱。
+蓝毛鲸鱼娘、滚轮余额、今日账目和跨天结算。完整功能与素材总览见 [项目首页](../README.md)。
 
-![收起状态](docs/collapsed-gold.png)
+> 当前桌面发布为 [desktop-v0.1.4](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.4)，安装包内部版本为 **0.2.3**。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
 
-展开之后会有鲸鱼娘在吃饭，下面是今日入账和饭钱：
+## 下载与操作
 
-![展开状态](docs/expanded-gold.png)
+- `SalaryMeter.exe`：免安装版。
+- `SalaryMeter-Setup.exe`：安装版。
+- 当前发布目标是 **Windows x64**，依赖 WebView2 Runtime。更新前先退出旧程序。
 
-## 功能
+下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.4)。
 
-- **今日打工入账**：按月薪、每月工作日、上下班时间、午休时长，按秒累加。
-- **下班倒计时**：上班中 / 午休中 / 已收工 / 休息日都会跟着变。
-- **偷吃（模型饭钱）**：按 token 用量折算，DeepSeek 工作日 9–12、14–18 走高价款，其余时段五折，其他厂商平价。
-- **三档外观**：深色 / 浅白 / 暗金，点一下立即生效。
-- **十二段人物动画**：上班吃东西、忙起来、午休涮火锅或打盹、下班庆祝、早上刷牙、休息哼歌、休息日打游戏、加班熬夜、被抓住偷吃、待机发呆，外加彩蛋「伸手抓抓抓」，按状态自动切换。总览图见 [docs/images/desktop-actions.png](docs/images/desktop-actions.png)。视频播不起来时人物先隐藏（不再退回旧版图集），**60 秒后自动重试视频**，成功就自己回来。
-- **自检**：设置里能看到今日已算 / 未算多少笔、合计多少、价格表来源，还有一个「重算今天的账」按钮。
-- **桌面浮层**：可以拖到桌面任意位置，能置顶、能鼠标穿透，带托盘图标和开机自启。
+人物独立站在桌面上，脚下余额条显示今日工资减去模型费用估算。点击余额条或状态文字展开/收起账目；点人物有互动；拖动可移动并保存位置。点账目右上角 `⋯`、右键人物或托盘菜单打开设置。
 
-![设置](docs/settings.png)
+设置支持工资作息、双休/单休/大小周、深色/浅白/暗金、80%–160% 人物大小；默认大小 130%。托盘支持设置、配色、置顶、鼠标穿透和退出，**当前代码没有开机自启菜单**。
 
-## 下载
+### 界面预览
 
-到 [Releases](../../releases) 下载：
+人物独立常驻，展开/收起的是今日账目。以下为仓库当前暗金样式截图：
 
-- `SalaryMeter-Setup.exe` —— 安装版（开机自启等交给安装器注册）
-- `SalaryMeter.exe` —— 免安装，直接双击就能跑
+| 收起账目 | 展开账目 |
+| --- | --- |
+| ![收起账目](docs/collapsed-gold.png) | ![展开账目](docs/expanded-gold.png) |
 
-只支持 Windows x64（Tauri + WebView2）。
+## 当前功能要点
 
-## 用法
+- 工资按有效工时累计，午休暂停；提供开工/下班倒计时和工作状态。
+- 金额逐位滚动，未变化的位数不动。扣费后红色冻结显示，3.6 秒无新扣费后补回期间工资；连续冻结最长 10 秒，不影响真实计算。
+- 12 段透明 WebM 动画按上班、忙碌、午休、收工、休息、加班等状态切换，普通切换等片尾。视频失败时人物隐藏，账目照常，60 秒后重试。
+- 彩蛋「伸手抓抓抓」会暂时把余额显示成 0，随后恢复，不扣款、不改账本。
+- 设置展示每日工资、本月累计估算、近 1 小时 token/s，以及账目自检、价格来源和「重算今天的账」。
+- 跨天账单展示昨日收入、费用和剩余；未收下的旧账单排队保留。点「收下」才算已读；点 × / Esc 本次暂不再弹，重启后仍会提醒。
+- 结算记录损坏时先备份再重建。这里是工资与用量的估算工具，不是考勤系统或服务商账单。
 
-- 拖动胶囊任意空白处可以移动，位置会记住。
-- 点余额条或状态文字（如「休息日」）展开，露出人物和今日账目；再点一次收起。
-- 点右上角 `⋯` 或右键人物打开设置：月薪、工作日、上下班时间、午休、配色、大小、自检。
-- 托盘图标右键：外观循环切换、始终置顶、鼠标穿透、开机自启、退出。
+## 与 DSH 联动
 
-## 数据是怎么来的
+桌面 EXE 需要先下载或安装。DSH 插件不会自动下载安装它，只按以下顺序查找已有程序：
 
-挂件自己不调用模型，它读的是 [DS Bot](https://github.com/Fei2411/DeepSeek-Bot)（DeepSeek Harness 桌面端）留在磁盘上的会话日志：
+1. 环境变量 `SALARY_METER_EXE` 指定的完整路径。
+2. 插件目录中的 `SalaryMeter.exe`。
+3. `%LOCALAPPDATA%\SalaryMeter\SalaryMeter.exe`。
+4. `E:\SalaryMeter\SalaryMeter.exe`。
+5. `C:\Program Files\SalaryMeter\SalaryMeter.exe`。
 
-```
-%USERPROFILE%\.ds-bot\sessions\<分组>\session-*\session.v4.jsonl.zstd
-```
+安装路径不同或 EXE 名称不同时，可用第一种方式明确指定，再重启 DSH。插件已有同路径实例时不会再开一个。
 
-日志是多个 zstd 帧首尾相接的 JSONL，程序按帧流式解压，挑出今天的 `usage` 事件，按当时生效的模型单价折算。只读当天写过的会话文件，DS Bot 关着也能算。
+插件启动的挂件通过宿主进程号跟随 DSH 退出；手动运行时也会尝试寻找 DS Bot 主进程，没有找到则独立运行。插件停用时只尝试关闭自己管理的实例，手动实例与宿主监视的行为不要混为一谈。
 
-价格表内置 36 个常见模型（DeepSeek / GLM / Step / Kimi / Qwen / MiniMax / OpenAI / Claude / Gemini / Grok），美元价按 7.15 折算人民币。节假日调整、搜索抓取、辅助调用没有计入。
+DSH 插件 v0.3.3 会写 `dsh-busy.json`，在状态变化时更新并每 5 秒续期。挂件读取有效心跳决定忙闲；超过 10 秒未更新或读不到时，回退到最近扣费和日志活动估算。
 
-## 自己编译
+## 数据来源与存储
 
-需要 Node 18+、Rust 稳定版、WebView2（Win10/11 自带）。
+桌面版只读取本机现有的会话用量，不额外调用模型。
+
+会话根目录依次选择：
+
+1. 环境变量 `DSH_HOME`。
+2. 若 `%USERPROFILE%\.ds-bot\data` 存在，使用 `%USERPROFILE%\.ds-bot`。
+3. 否则使用 `%USERPROFILE%\.dsh`。
+
+日志相对路径为 `sessions/<分组>/session-*/session.v4.jsonl.zstd`。程序解析压缩 JSONL 中的使用记录，按北京时间归日。价格优先合并启动时读到的插件价格缓存，否则使用内置价表；详细估算边界见 [首页](../README.md#模型饭钱怎么算)。
+
+程序数据目录为 `%APPDATA%\com.local.salarymeter\`：
+
+| 文件 | 用途 |
+| --- | --- |
+| `config.json` | 工资、作息、主题、大小和展开状态 |
+| `position.json` | 窗口位置 |
+| `settlements.json` | 结算账单、待确认队列及历史 |
+| `dsh-busy.json` | 插件写入的任务忙闲心跳 |
+| `startup.log`、`renderer.log` | 启动与动画运行排障 |
+
+首次缺少桌面配置时会尝试迁移插件设置；之后两边不是实时双向同步。备份或搬迁时先退出程序，再复制数据目录。费用不一致时先核对目录、价格来源和工资配置，再使用重算功能。
+
+工资实时显示使用系统本地时间，费用归日与跨天结算使用北京时间。非北京时间系统以及跨夜班次应谨慎核对，不要将当前计算当成完整排班支持。
+
+## 从源码构建
+
+在 Windows 上准备：
+
+- Node.js（建议使用受支持的 LTS；若同时运行根目录插件，按其要求使用 Node.js ≥22）。
+- Rust 稳定工具链；项目声明最低 Rust 1.77，实际依赖可能要求更新版本。
+- Visual Studio C++ Build Tools 与 Windows SDK。
+- WebView2 Runtime。
+
+从仓库根目录执行：
 
 ```powershell
-npm install
+cd desktop
+npm ci
+npm run tauri:dev
+```
+
+打包：
+
+```powershell
 npm run tauri:build
 ```
 
-产物：`src-tauri\target\release\salary-widget.exe` 和 `src-tauri\target\release\bundle\nsis\SalaryMeter_0.2.1_x64-setup.exe`。
+产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.3，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
 
-目录说明：
+### 源码目录
 
-- `renderer/` —— 界面（胶囊页 `index.html` + `widget.js`，设置页 `settings.html`）
-- `renderer/assets/webm/` 和 `renderer/pet-scenes.mjs` —— 十一段人物动画和场景映射，是插件版同名文件的拷贝；改的时候两边一起改
-- `src-tauri/src/ledger.rs` —— 扫会话日志、算钱
-- `src-tauri/src/lib.rs` —— 窗口、托盘、命令
-- `assets/`、`main.js`、`preload.js`、`网页版-salary-meter.html` —— 早期的 Electron 版本，留作参考
+| 路径 | 内容 |
+| --- | --- |
+| `renderer/index.html`、`renderer/widget.js` | 桌宠主界面、金额与视频调度 |
+| `renderer/odometer.mjs` | 逐位金额滚轮逻辑 |
+| `renderer/pet-scenes.mjs`、`renderer/scene-scheduler.mjs` | 场景映射与片尾切换 |
+| `renderer/assets/webm/` | 12 段桌宠视频 |
+| `renderer/settings.html` | 设置与账目自检 |
+| `renderer/settlement.*` | 结算窗口 |
+| `src-tauri/src/lib.rs` | 窗口、托盘、配置、宿主跟随和命令 |
+| `src-tauri/src/ledger.rs` | 会话日志扫描、费用和 token/s |
+| `src-tauri/src/settlement.rs` | 跨天结算与账单保存 |
+| `checks/` | 纯逻辑及界面回归脚本 |
+| `网页版-salary-meter.html` | 早期网页版本参考，不是当前桌面入口 |
 
-## 授权
+### 检查范围
 
-桌面余额栏使用随应用打包的 Noto Sans CJK SC Regular / Medium 开源字体**子集**（SIL OFL 1.1，只保留界面实际用到的 797 个码点，两个 woff2 共 508,964 字节；原字体 32.9MB 不再打进产物）。原字体放在 `fonts-src/`，改了界面文案用 `tools/subset-fonts.py` 重新裁剪。来源与许可见 [字体说明](renderer/assets/fonts/README.md) 和 [OFL](renderer/assets/fonts/OFL.txt)；发布源码与安装包时保留这些文件，字体许可独立于项目 MIT 许可。子集之外的字符会回退到系统字体，不会出现方块。
+根目录 `npm test` 检查插件计价核心；桌面 Rust 检查可在 `desktop/src-tauri` 中运行 `cargo test`。运行 `checks/` 的脚本前请阅读各自依赖：部分需要浏览器/Playwright 测试环境，并非装好 Tauri 就能直接全部运行。
 
-代码沿用同作者 [dsh-salary-meter](https://github.com/Jiang-Xiaoxing/dsh-salary-meter) 插件的 MIT 授权。
+已有 Release 记录报告了扣费冻结、视频层、场景调度、视频失败和结算模拟验证；真实零点长期运行、多显示器与非 150% 缩放尚有待验证项。文档更新不代表重新完成这些真机测试。
 
-**十二段人物动画**：其中十段（大口吃零食、忙起来、偷吃被抓住、午休涮火锅、趴着睡、收工蹦、晨间刷牙、悠闲哼歌、开黑打游戏、待机发呆）取自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的 `assets/webm`，那是 MIT 授权的开源桌面宠物（许可证全文见仓库根目录的 [`LICENSE-dsh-pet`](../LICENSE-dsh-pet)）。`加班熬夜` 和彩蛋用的 `伸手抓抓抓` 是按 dsh-pet 公开的抠图流程自己做的（AI 生成绿幕 → 站位归一化 → 转透明 VP9），不是原作者提供的动画，随本项目 MIT 授权。改动画时两边的 `renderer/assets/webm` 要一起改。
+## 素材与许可
 
-旧版图集人物的立绘是社区「大肥鱼」鲸鱼娘形象的自制素材，参考了 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的二创形象。桌面版已经不用这套图集了：视频读不出来时人物先隐藏，每 60 秒自动重试一次视频；图集现在只留在插件版（DSH 窗口里）使用。动画与形象的著作权归各自作者，二次使用请署名。
+代码使用 [MIT](LICENSE)。十二段视频中十段来自 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet)，保留 [第三方 MIT 许可](../LICENSE-dsh-pet)；「加班熬夜」「伸手抓抓抓」为本项目制作。素材总览见 [动画总览](../docs/images/desktop-actions.png)。桌面版不使用插件的图集作为视频失败回退。
 
-## 桌宠布局（2026-11-06）
-
-人物独立显示在桌面上，脚下余额条显示今日入账减去已统计饭钱。点击余额条或状态文字展开/收起今日账目；账目右上角的 ⋯ 或右键人物打开设置，也可以使用托盘菜单。设置中的人物大小支持 80%–160%，自动保存；人物固定走视频动画，视频读不出来时先隐藏，60 秒后自动重试。气泡在场景变化或点击人物时短暂显示。
-
-本节描述本地新版；上方旧胶囊截图暂供历史参考。开机自启、置顶和鼠标穿透保持原有设置。
+Noto Sans CJK SC Regular / Medium 字体子集遵循 SIL OFL 1.1，保留 [字体说明](renderer/assets/fonts/README.md) 与 [OFL](renderer/assets/fonts/OFL.txt)。原字体在 `fonts-src/`，裁剪工具为 `tools/subset-fonts.py`，界面新增文字后需核对字体覆盖。其他形象来源及社区致谢见 [项目首页](../README.md#素材致谢与许可)。

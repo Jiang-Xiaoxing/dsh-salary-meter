@@ -21,7 +21,7 @@
 | 部分 | 你会看到什么 | 当前发布版本 |
 | --- | --- | --- |
 | Windows 桌面挂件 | 桌面人物、滚轮金额、今日账目、设置、跨天结算 | [desktop-v0.1.4](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.4)（程序内部版本 0.2.3） |
-| DSH 插件 | DSH 窗口内的小工资条，以及供桌面挂件读取的任务忙闲心跳 | [v0.3.3](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/v0.3.3) |
+| DSH 插件 | 启动/管理已有桌面挂件，并写入任务忙闲心跳；当前不再绘制 DSH 内嵌工资条 | [v0.3.3](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/v0.3.3) |
 
 **想要桌面上的肥鱼，请下载桌面挂件。** 安装 DSH 插件不会自动下载桌面 EXE；要联动运行，需要桌面程序已存在、且插件能找到它。桌面版与插件版有各自的数据和功能范围，升级时也请分别更新。
 
@@ -86,15 +86,21 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 
 默认工资参数：月薪 **5,000 元**、每月 **22 天**、**09:00–18:00**、午休 **1 小时**、双休。午休从 12:00 附近开始并限制在班次内。大小周按固定周序交替，并非可自定义调休的日历。
 
-## DSH 窗口内的小工资条
+## 今日账目与三个样式
 
-插件窗口内的工资条与桌宠不是同一种渲染方式。它常驻显示工资、时间、倒计时和费用；人物默认收起，展开后使用图集/WebGL 插值动画，支持点击反馈、拖动及显示偏好保存。窗口隐藏或系统要求减少动态效果时会减少/暂停动画；WebGL 不可用时显示静态人物。
+点击人物脚下的余额条或状态文字，会展开当前的「今日账目」面板：顶部是标题、时间和设置入口，中间是下班倒计时与进度条，底部是「今日入账」和「肥鱼饭钱（估算）」。收起的是账目，不是换回旧版工资条。
 
-| 深色示例 | 浅色示例 |
+设置中的「配色」有三个样式，显示内容和操作一致，只改变颜色：
+
+| 样式 | 视觉特点 |
 | --- | --- |
-| ![DSH 内小工资条深色](docs/images/widget-dark.png) | ![DSH 内小工资条浅色](docs/images/widget-light.png) |
+| 深色 | 深灰底、浅色文字、蓝紫色进度条 |
+| 浅白 | 浅白底、深色文字、蓝色进度条 |
+| 暗金 | 深棕底、金色文字和进度条；上方仓库截图展示此样式 |
 
-以上是 DSH 0.2.1-rc.5 的历史实机截图，使用模拟时间和合成费用记录，展示插件样式，不代表最新桌宠界面。
+上方的收起/展开图片是仓库已有的暗金截图，**不是三个样式各一张**。目前没有在本文附上深色和浅白的新版截图，不以旧图代替。
+
+当前插件只负责桌面程序联动和数据支持，`client.js` 的入口已停止挂载旧的 DSH 内嵌工资条。仓库仍保留部分旧图集代码和图片，但它们不代表当前启用的界面。
 
 ## 模型“饭钱”怎么算
 
@@ -121,7 +127,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 
 ## 数据保存在本机哪里
 
-- 插件：`$DSH_HOME/data/dsh-salary-meter/`，未设置时默认 `~/.dsh/data/dsh-salary-meter/`。包含工资配置、显示偏好、当天费用和价格缓存。
+- 插件：`$DSH_HOME/data/dsh-salary-meter/`，未设置时默认 `~/.dsh/data/dsh-salary-meter/`。包含工资配置、历史显示偏好、当天费用和价格缓存。
 - 桌面挂件：`%APPDATA%\com.local.salarymeter\`，包含配置、位置、结算记录、任务心跳和运行日志。
 - 桌面版会话目录：优先 `DSH_HOME`；否则在存在 `~/.ds-bot/data` 时选 `~/.ds-bot`，再回退 `~/.dsh`。日志位于其 `sessions/<分组>/session-*/session.v4.jsonl.zstd`。
 
@@ -132,7 +138,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 - 插件核心检查：在仓库根目录运行 `npm test`；插件声明 Node.js ≥22。
 - 桌面版使用 **Tauri 2 + Rust + WebView2**，构建步骤、源码目录和检查说明见 [desktop/README.md](desktop/README.md)。
 - 桌面版最新发布记录包含扣费冻结、视频层、场景调度和结算等验证结果，但真实零点长时间运行、多显示器和非 150% 缩放仍有待验证项，不能视为全平台保证。
-- 插件动画的历史运行记录见 [animation-validation.md](docs/animation-validation.md)，完整版本变化见 [Releases](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases)。
+- 已停用内嵌界面的历史动画运行记录见 [animation-validation.md](docs/animation-validation.md)，不代表当前界面；完整版本变化见 [Releases](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases)。
 
 本文按 2026-11-09 的仓库代码与发布记录整理；源码已实现、历史测试通过和你本机实际运行通过是不同的状态。
 
@@ -142,6 +148,6 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 
 - 桌宠的十段动画来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的 `assets/webm`，按 MIT 使用，许可证见 [LICENSE-dsh-pet](LICENSE-dsh-pet)。
 - 「加班熬夜」「伸手抓抓抓」为本项目按绿幕抠像、站位归一化、透明 VP9 流程制作的素材，不是原作者提供的动画。
-- DSH 插件的图集人物按社区“大肥鱼”鲸鱼娘形象自制，与桌面 WebM 动画不同。
+- 仓库保留的旧 DSH 内嵌图集人物按社区“大肥鱼”鲸鱼娘形象自制，与当前桌面 WebM 动画不同。
 - 桌面余额栏打包 Noto Sans CJK SC 字体子集，遵循 SIL OFL 1.1，见 [字体说明](desktop/renderer/assets/fonts/README.md) 与 [OFL](desktop/renderer/assets/fonts/OFL.txt)。
 - 感谢社区二创：[吃白饭的大肥鱼](https://www.bilibili.com/video/BV1JFtZ6iEpt/)、[蓝色大肥鱼表情包](https://www.bilibili.com/video/BV1V88G6TEvg/)、[家里来了个吃白饭的大肥鱼](https://www.bilibili.com/video/BV1bXHW66Es5/)，以及 [dsh-sidebar-qa](https://github.com/ChenRuoT/dsh-sidebar-qa) 的插件介绍参考。形象与素材权利归各自作者。

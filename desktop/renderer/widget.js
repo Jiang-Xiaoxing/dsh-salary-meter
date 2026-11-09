@@ -870,6 +870,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     logLine('切片段 ' + target.key + ' -> ' + next.id + ' (' + src + ')');
     const show = () => {
       if (sceneAttempt !== myAttempt) return;
+      // 播出来了才撤掉 4 秒保护：不能像以前那样在 play() 之前就撤，
+      // 否则 play() 的 Promise 一直 pending 时没人兜底，loading 状态就永远卡住
+      clearTimeout(videoGuard);
       loadingKey = null;
       loadingSrc = null;
       /* 统一收敛：不管上一次是哪个层、playingEl 有没有被清空，
@@ -902,7 +905,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     };
     const play = () => {
       if (sceneAttempt !== myAttempt) return;
-      clearTimeout(videoGuard);
       // 系统开了「减少动态效果」就停在第一帧
       const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
       next.currentTime = 0;

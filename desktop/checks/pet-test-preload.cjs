@@ -16,7 +16,8 @@ let notify=()=>{};
 window.__wlog=[];
 window.api={
   getConfig:async()=>config,
-  getState:async()=>({config,today}),
+  // 返回快照而不是共享对象：真实环境是跨进程取数，改花费必须等到下一次 refresh 才生效
+  getState:async()=>({config:{...config},today:{...today}}),
   setConfig:async p=>{config={...config,...p};notify(config);return config},
   onConfig:cb=>notify=cb,
   setExpanded:async expanded=>{config.expanded=expanded;notify(config)},

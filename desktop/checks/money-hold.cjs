@@ -6,8 +6,11 @@
 //   - 但别扣完立刻又变绿往上跳
 //   - 扣钱期间金额固定不动，等这波扣钱结束再一次性把之前加的钱补上来
 //
-// Codex 审查后补强的地方：断言用 null 判断、金额保留负号、固定时钟、
-// 冻结全程都要是红色（不只是前一秒）。
+// 断言口径（Codex 两轮审查后收紧）：
+//   - 冻结从「扣钱冻结」日志出现的时刻算，不从金额刚掉下来算
+//   - 冻结期间每一个样本都必须是红的；解冻后每一个样本都不能还带着红
+//   - 补回时必须出现过绿色
+//   - 连续扣费也要在 10 秒上限处强制解冻一次
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -33,6 +36,14 @@ app.whenReady().then(async () => {
       const row = document.querySelector('#balanceRow');
       return { n: Number.isFinite(n) ? n : null, text: t, cls: row.className };
     })()`);
+    const logs = () => run('window.__wlog || []');
+    const waitFor = async (pred, tries, gap) => {
+      for (let i = 0; i < tries; i++) {
+        if (await pred()) return true;
+        await sleep(gap);
+      }
+      return false;
+    };
 
     // 1) 等基准建立、金额开始往上涨
     await sleep(5000);
@@ -41,69 +52,63 @@ app.whenReady().then(async () => {
     assert.ok(base.n > 0, '基准应该是正数（测试时钟固定在工作日 10:00），实际 ' + base.n);
     console.log('基准 ¥' + base.n.toFixed(2));
 
-    // 2) 模拟一笔 5 分钱的扣费（下一次 refresh 会被挂件读到）
+    // 2) 模拟一笔 5 分钱的扣费
     await run('window.__setExpense(5.05)');
 
-    // 3) 等金额掉下来（扣费生效）；再等日志出现「扣钱冻结」——冻结是从那一刻开始，
-    //    之前的几百毫秒还在正常上涨，不能拿来当冻结期断言。
-    let dropped = null;
-    const t0 = Date.now();
-    for (let i = 0; i < 30; i++) {
-      const s = await snapshot();
-      if (s.n !== null && s.n <= base.n - 0.01) { dropped = s.n; break; }
-      await sleep(200);
-    }
-    assert.ok(dropped !== null, `扣钱后金额应该掉下来，实际一直没掉（基准 ${base.n}）`);
+    // 3) 等「扣钱冻结」日志出现，这才是冻结真正开始的时刻
+    const froze = await waitFor(async () => (await logs()).some(l => l.startsWith('扣钱冻结')), 40, 200);
+    assert.ok(froze, '日志里一直没出现「扣钱冻结」，冻结没生效');
+    const frozenStart = await snapshot();
+    assert.ok(frozenStart.n !== null, '冻结时金额没取到');
+    assert.ok(frozenStart.n < base.n - 0.01, `扣钱后金额应该下来：基准 ${base.n}，冻结 ${frozenStart.n}`);
+    assert.ok(frozenStart.cls.includes('down'), '冻结时余额应该是红色(down)，实际 "' + frozenStart.cls + '"');
+    const frozenValue = frozenStart.n;
+    console.log(`冻结在 ¥${frozenValue.toFixed(2)}（基准 ¥${base.n.toFixed(2)}），class="${frozenStart.cls}"`);
 
-    let frozenAt = null;
-    let frozenValue = null;
-    let clsAtFreeze = '';
-    for (let i = 0; i < 40; i++) {
-      const logs = await run('window.__wlog || []');
-      if (logs.some(l => l.startsWith('扣钱冻结'))) {
-        const s = await snapshot();
-        frozenAt = Date.now();
-        frozenValue = s.n;
-        clsAtFreeze = s.cls;
-        break;
-      }
-      await sleep(150);
-    }
-    assert.ok(frozenAt !== null, '日志里一直没出现「扣钱冻结」，冻结没生效');
-    assert.ok(frozenValue !== null, '冻结金额没取到');
-    console.log(`扣钱后金额 ¥${dropped.toFixed(2)}，冻结在 ¥${frozenValue.toFixed(2)}，class="${clsAtFreeze}"，距模拟扣费 ${frozenAt - t0}ms`);
-    assert.ok(clsAtFreeze.includes('down'), '冻结时余额应该是红色(down)，实际 "' + clsAtFreeze + '"');
-
-    // 4) 观察到解冻为止（安静期 3.6 秒 + 余量），期间金额一动不动、一直是红色
+    // 4) 从冻结时刻开始采样 7 秒，覆盖解冻
     const samples = [];
-    for (let i = 0; i < 34; i++) { // 6.8 秒
+    const t0 = Date.now();
+    for (let i = 0; i < 35; i++) {
       const s = await snapshot();
-      samples.push({ dt: Date.now() - frozenAt, n: s.n, cls: s.cls });
+      samples.push({ dt: Date.now() - t0, n: s.n, cls: s.cls });
       await sleep(200);
     }
-    const held = samples.filter(s => s.dt <= 3000); // 安静期 3.6 秒，前 3 秒必定还在冻
-    const moved = held.filter(s => Math.abs(s.n - frozenValue) > 0.001);
-    assert.equal(moved.length, 0, '冻结的头 3 秒金额不该动，实际动过: ' + JSON.stringify(moved.slice(0, 5)));
+    // 金额没变 = 还在冻结；变了 = 已解冻
+    const held = samples.filter(s => Math.abs(s.n - frozenValue) <= 0.001);
+    const thawed = samples.filter(s => Math.abs(s.n - frozenValue) > 0.001);
+    assert.ok(held.length >= 10, `冻结样本太少（${held.length}），冻结可能没撑住`);
     const notRed = held.filter(s => !s.cls.includes('down'));
-    assert.equal(notRed.length, 0, '冻结期间应该一直是红色，这些样本不是: ' + JSON.stringify(notRed.slice(0, 5)));
+    assert.equal(notRed.length, 0, '冻结期间每一个样本都该是红色，这些不是: ' + JSON.stringify(notRed.slice(0, 5)));
+    assert.ok(thawed.length > 0, '7 秒内应该已经解冻，实际金额一直没恢复');
+
+    const stillDown = thawed.filter(s => s.cls.includes('down'));
+    assert.equal(stillDown.length, 0, '解冻后不该还挂着红色: ' + JSON.stringify(stillDown.slice(0, 5)));
+    const sawUp = thawed.some(s => s.cls.includes('up'));
+    assert.ok(sawUp, '补回工资的时候应该闪一下绿色，实际没抓到');
 
     const last = samples[samples.length - 1];
-    assert.ok(last.n > frozenValue + 0.005,
-      `解冻后应该把工资补回来：冻结 ${frozenValue}，最后 ${last.n}`);
-    const thawed = samples.filter(s => s.dt > 4500);
-    assert.ok(thawed.length > 0, '应该采到解冻后的样本');
-    const frozenAfterThaw = thawed.filter(s => s.cls.includes('down') && s.cls.includes('up'));
-    assert.equal(frozenAfterThaw.length, 0, '解冻后不应该还带着冻结的红色');
+    assert.ok(last.n > frozenValue + 0.005, `解冻后应该把工资补回来：冻结 ${frozenValue}，最后 ${last.n}`);
+    console.log(`样本 ${samples.length} 个（冻结 ${held.length} / 解冻 ${thawed.length}），最后 ¥${last.n.toFixed(2)}（补回 ${(last.n - frozenValue).toFixed(4)}）`);
 
-    // 5) 日志里能查到这一轮冻结
-    const logs = await run('window.__wlog || []');
-    const moneyLogs = logs.filter(l => l.includes('扣钱'));
-    console.log(`样本 ${samples.length} 个，最后 ¥${last.n.toFixed(2)}（补回 ${(last.n - frozenValue).toFixed(4)}）`);
-    console.log('日志: ' + moneyLogs.join(' / '));
+    // 5) 连续扣费：每 3.3 秒一笔，共 4 笔，10 秒上限必须生效一次
+    const beforeBurst = (await logs()).filter(l => l.startsWith('扣钱结束')).length;
+    for (let i = 0; i < 4; i++) {
+      await run(`window.__setExpense(${5.10 + i * 0.05})`);
+      if (i === 0) await waitFor(async () => (await logs()).filter(l => l.startsWith('扣钱冻结')).length >= 2, 30, 200);
+      else await sleep(3300);
+    }
+    await sleep(3000);
+    const afterBurstLogs = await logs();
+    const thawCount = afterBurstLogs.filter(l => l.startsWith('扣钱结束')).length - beforeBurst;
+    assert.ok(thawCount >= 1, `连续扣费 13 秒里应该至少因 10 秒上限解冻一次，实际 ${thawCount} 次`);
+    console.log(`连续扣费：新增解冻 ${thawCount} 次`);
+
+    const moneyLogs = afterBurstLogs.filter(l => l.includes('扣钱'));
     assert.ok(moneyLogs.some(l => l.startsWith('扣钱冻结')), '日志里应该有「扣钱冻结」');
     assert.ok(moneyLogs.some(l => l.startsWith('扣钱结束')), '日志里应该有「扣钱结束」');
+    console.log('扣钱日志 ' + moneyLogs.length + ' 条，最后 4 条: ' + moneyLogs.slice(-4).join(' / '));
 
-    console.log('PASS 扣钱变红冻住，这波结束后一次补回');
+    console.log('PASS 扣钱变红冻住、全程红、这波结束后一次补回；连续扣费到上限会强制解冻');
     app.exit(0);
   } catch (error) {
     console.error('FAIL ' + (error && error.message ? error.message : error));

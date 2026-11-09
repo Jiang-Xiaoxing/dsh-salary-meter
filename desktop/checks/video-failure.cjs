@@ -68,8 +68,8 @@ app.whenReady().then(async () => {
     assert.ok(later.status.length > 0 && /^¥/.test(later.earned), '面板数字要一直在');
     console.log(`  再过 4 秒：今日入账 ${money1} -> ${later.earned}，状态 ${later.status}`);
 
-    // 等到超过 60 秒重试窗口，重试仍然失败 → 还是隐藏
-    await sleep(56000);
+    // 等到超过 60 秒重试窗口，再多等一会儿让重试后的 4 秒加载超时走完，仍然要隐藏
+    await sleep(60000);
     const afterRetry = await state();
     console.log('  60 秒重试之后（素材还是坏的）：', JSON.stringify(afterRetry));
     assert.equal(afterRetry.stageHidden, true, '重试仍然失败时人物继续隐藏');

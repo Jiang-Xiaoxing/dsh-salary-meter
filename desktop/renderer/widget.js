@@ -90,7 +90,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       if (message === lastLogText && now - lastLogAt < 1000) return;
       lastLogText = message;
       lastLogAt = now;
-      if (api.log) api.log(message);
+      // api.log 返回 Promise，拒绝不能靠外面这层同步 try/catch 接住
+      const sent = api.log ? api.log(message) : null;
+      if (sent && typeof sent.catch === 'function') sent.catch(() => {});
     } catch (error) {}
   }
 
@@ -116,6 +118,9 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   // 人物第一次真正启动之前，paint 不去碰播放器。否则启动时 paint 播一次、
   // 首次 refresh 的 applyCharacter 又播一次，两个入口各来一遍（画面会闪，也更容易叠层）
   let characterStarted = false;
+  // 正在加载的那一段：加载慢的时候 100ms 轮询会反复 startClip，把 currentTime 一次次归零
+  let loadingKey = null;
+  let loadingSrc = null;
   let videoTimer = null;
   let videoGuard = null;
   /* 场景调度：想播的和正在播的分开，普通变化等这一段播完再切。
@@ -267,10 +272,13 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
      把这期间涨的工资一次性补回来（一直有新扣费也最多冻 10 秒，免得看着像卡死）。
      用户 2026-11-09 定：扣钱变红没问题，但别马上又变绿跳上去。 */
   let holdAmount = null;      // 冻住时显示的值；null = 没冻
-  let holdStartAt = 0;        // 这次冻结开始的时间（performance.now）
-  let holdRedoAt = 0;         // 到这个时刻还没新扣费就解除
-  let lastRealAmount = null;  // 上一帧的真实余粮，用来发现「又扣了一笔」
-  const HOLD_QUIET_MS = 2600; // 这么久没有新扣费 = 这一波结束
+  let holdStartAt = 0;        // 这一波第一次扣钱的时间（只在首次设，10 秒上限才有意义）
+  let holdQuietUntil = 0;     // 安静到这个时刻：期间没有新扣费就算这波结束
+  let holdHandledAt = 0;      // 已经处理到哪一次扣费信号
+  let expensePulseAt = 0;     // refresh 发现「今天花费涨了」的时刻
+  /* 安静期要比 refresh 周期（3 秒）长：否则费用还没读下一次就先解冻，
+     连续扣费时会「补一点又红」来回跳（Codex 审查第 1 条）。 */
+  const HOLD_QUIET_MS = 3600;
   const HOLD_MAX_MS = 10000;  // 连续扣费也别冻超过 10 秒
 
   function clearMoneyFx() {
@@ -589,25 +597,31 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       lastAmount = null;
       greenMark = null;
       holdAmount = null;
-      lastRealAmount = null;
+      holdStartAt = 0;
+      holdQuietUntil = 0;
+      holdHandledAt = 0;
+      expensePulseAt = 0;
       clearMoneyFx();
     }
 
-    // 扣钱冻结：真实余粮往下掉（也就是又扣了一笔）就当场冻住；
-    // 连续 HOLD_QUIET_MS 没再往下掉 = 这波扣完，解冻并把涨的钱一次补回来。
+    // 扣钱冻结：refresh 发现「今天花费涨了」就冻住显示；这波安静下来再按真实金额走。
+    // 用花费差而不是「余额跌」来识别：改工资参数、账本重算都不会被误当成扣钱（Codex 审查第 4 条）。
     const nowP = performance.now();
-    if (lastRealAmount !== null && realAmount < lastRealAmount - 0.005) {
+    if (expensePulseAt > holdHandledAt) {
+      holdHandledAt = expensePulseAt;
       const wasFrozen = holdAmount !== null;
+      if (!wasFrozen) holdStartAt = nowP;
       holdAmount = realAmount;
-      holdStartAt = nowP;
-      holdRedoAt = nowP + HOLD_QUIET_MS;
-      logLine((wasFrozen ? '又扣一笔，继续冻' : '扣钱冻结') + ' 金额=¥' + money(Math.abs(holdAmount)) + ' 真实=¥' + money(realAmount) + ' t=' + Math.round(nowP));
+      holdQuietUntil = nowP + HOLD_QUIET_MS;
+      logLine((wasFrozen ? '又扣一笔，继续冻' : '扣钱冻结') + ' 金额=¥' + money(Math.abs(holdAmount)) + ' t=' + Math.round(nowP));
     }
-    lastRealAmount = realAmount;
-    const frozen = holdAmount !== null && nowP - holdStartAt < HOLD_MAX_MS && nowP < holdRedoAt;
+    const frozen = holdAmount !== null && nowP - holdStartAt < HOLD_MAX_MS && nowP < holdQuietUntil;
     if (!frozen && holdAmount !== null) {
       const caught = realAmount - holdAmount;
       holdAmount = null; // 这波扣完：显示跳回真实金额，涨的钱一次补上
+      // 不管有没有补差，都要把冻结时的红色清掉：休息日、午休、下班后工资不涨，
+      // 只会在 caught<=0 时不闪绿，红色就永远留着了（Codex 审查第 3 条）
+      el.balance.classList.remove('down');
       if (caught > 0.0005) {
         greenMark = realAmount;
         bigFlash('up', 1600); // 补回来的时候闪一下绿，别让人以为数字自己蹦了
@@ -782,6 +796,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     playingClip = null;
     pendingClip = null;
     playingEl = null;
+    loadingKey = null;
+    loadingSrc = null;
     for (const video of el.videos) {
       video.pause();
       video.dataset.on = 'false';
@@ -845,11 +861,17 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     const previous = playingEl;
     const nextIndex = activeVideo === 0 ? 1 : 0;
     const next = videos[nextIndex];
-    const myAttempt = ++sceneAttempt;
     const src = `assets/webm/${sceneFileName(target.scene, target.turn)}`;
+    // 同一段还在加载就等它，别反复 startClip 把 currentTime 归零（加载慢时 100ms 轮询会一直打断）
+    if (loadingKey === target.key && loadingSrc === src) return;
+    loadingKey = target.key;
+    loadingSrc = src;
+    const myAttempt = ++sceneAttempt;
     logLine('切片段 ' + target.key + ' -> ' + next.id + ' (' + src + ')');
     const show = () => {
       if (sceneAttempt !== myAttempt) return;
+      loadingKey = null;
+      loadingSrc = null;
       /* 统一收敛：不管上一次是哪个层、playingEl 有没有被清空，
          显示这一帧时只允许 next 是可见的。以前只关 previous 一个，
          previous 为 null 时旧层就永远开着，两层叠着显示。 */
@@ -917,6 +939,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   function videoFailed() {
     // 不永久放弃：人物先隐藏（不拿图集顶），60 秒后再试视频，成功就自动回来
     logLine('视频失败，人物隐藏，60 秒后重试');
+    loadingKey = null;
+    loadingSrc = null;
     videoRetryAt = performance.now() + VIDEO_RETRY_MS;
     stopVideos();
     syncCharacterVisibility();
@@ -1041,15 +1065,19 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
         if (api.userIdle) {
           api.userIdle().then(ms => { userIdleMs = Number(ms) || 0; }).catch(() => {});
         }
+        // 首次拿到的是今天累计花费的基线，不是「刚扣了一笔」
+        const firstBasis = !basisReady;
         if (!basisReady) {
           // 首屏 paint 用的是默认配置，等真实数据到了再重建基准，否则会被当成一次涨跌
           basisReady = true;
           lastAmount = null;
           greenMark = null;
-          // 真实花费到位的这一下，余粮会从「工资全额」掉到「工资−花费」，那不是扣钱
-          lastRealAmount = null;
         }
-        if (today.expense > lastExpense + 1e-9) busyUntil = Date.now() + 5000;
+        if (today.expense > lastExpense + 1e-9) {
+          busyUntil = Date.now() + 5000;
+          // 花费涨了 = 真扣了一笔，交给 paint 去冻住（比看余额跌准，改工资参数不会误判）
+          if (!firstBasis) expensePulseAt = performance.now();
+        }
         lastExpense = today.expense;
         applyTheme();
         if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }

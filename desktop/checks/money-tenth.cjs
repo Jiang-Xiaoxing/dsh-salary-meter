@@ -66,6 +66,17 @@ app.whenReady().then(async () => {
     const crossed=await waitRed(false);
     assert.equal(crossed.text,'2.20'); assert.equal(crossed.up,true,'跨角补差立即绿');
     console.log('PASS: 同角补差不绿、随后进角才绿、跨角补差立即绿');
+    await run('__setAmount(1.1949)'); await sleep(2500);
+    await run(`window.__freezeClasses=[]; window.__freezeObserver=new MutationObserver(() => {
+      __freezeClasses.push(document.querySelector('#balanceRow').className);
+    }); __freezeObserver.observe(document.querySelector('#balanceRow'), {attributes:true,attributeFilter:['class']});
+    __chargeWithAmount(0.0001,1.1956)`);
+    await waitRed(true);
+    const firstFrame = await run('window.__freezeClasses');
+    assert.ok(firstFrame.length>0 && !firstFrame.some(c=>c.split(' ').includes('up')),
+      '净上涨跨角且扣费时，冻结首帧不许绿: '+JSON.stringify(firstFrame));
+    await run('__freezeObserver.disconnect()');
+    console.log('PASS: 扣费与净上涨跨角同时发生时，冻结首帧保持红色');
     console.log('PASS: 显示角位进位、非进位不闪、四舍五入、跨元、负余额与红色反馈');
     app.exit(0);
   } catch(e) { console.error(e); app.exit(1); }

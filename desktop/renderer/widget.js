@@ -713,8 +713,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       // 涨钱往上滚、扣钱往下滚；首屏没有基准，按涨处理（反正不动画）
       renderAmount(text, egg ? -1 : lastAmount === null || amount >= lastAmount ? 1 : -1);
     }
-    if (egg) {
-      // 显示被顶掉了，基准跟着真实金额走，恢复的那一下才不会被当成一次涨跌
+    if (egg || frozen) {
+      // 彩蛋/扣费冻结只更新基准；冻结首帧也不能被净上涨的绿色盖掉。
       lastAmount = amount;
     } else if (changed || lastAmount === null) {
       tickMoney(amount, now);

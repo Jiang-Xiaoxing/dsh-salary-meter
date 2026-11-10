@@ -19,3 +19,7 @@ window.api = {
 };
 window.__setAmount = amount => window.api.setConfig({ salary: (amount + expense) * 8 });
 window.__charge = amount => { expense += amount; };
+window.__chargeWithAmount = (charge, amount) => {
+  expense += charge;
+  config = { ...config, salary: (amount + expense) * 8 };
+};

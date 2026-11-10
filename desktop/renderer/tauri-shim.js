@@ -72,7 +72,7 @@
         } else regions.push({x:r.x,y:r.y,width:r.width,height:r.height});
       }
       add(document.querySelector('.sm-mascot'), true);
-      ['#balanceRow','.sm-top','.sm-worktime','.sm-ledger'].forEach(function(s){add(document.querySelector(s),false);});
+      ['#balanceRow','.sm-ledger'].forEach(function(s){add(document.querySelector(s),false);});
       var next = JSON.stringify(regions);
       if (next !== lastRegions) {
         lastRegions = next;
@@ -82,9 +82,9 @@
     reportRegions();
     setInterval(reportRegions, 100);
     var nodes = document.querySelectorAll(
-      '.sm-top, .sm-top span, .sm-top time, .sm-top b, ' +
-      '.sm-worktime, .sm-worktime span, .sm-worktime b, ' +
-      '.sm-ledger, .sm-ledger div, .sm-ledger label, .sm-ledger b, ' +
+      '.sm-ledger-head, .sm-ledger-head b, .sm-ledger-head time, ' +
+      '.sm-ledger-title, .sm-ledger-meta, ' +
+      '.sm-ledger-count, .sm-ledger-count span, .sm-ledger-count b, ' +
       '.sm-layer-bar, .sm-layer-bar span'
     );
     for (var i = 0; i < nodes.length; i++) {

@@ -1,23 +1,33 @@
-/* 已确认的桌宠布局：人物独立，账目按需展开。 */
+/* 已确认的桌宠布局：人物独立，鱼粮无底板，账目按需展开。
+   2026-11-10：按三主题图稿重做层级；大块桌面色只出现在截图里，产品窗口保持透明。 */
 [data-salary-meter], [data-salary-meter][data-expanded='true'] {
   width:440px;height:390px;max-width:none;background:transparent;box-shadow:none;border:0;
   overflow:visible;--pet-scale:1;
 }
 [data-salary-meter][data-expanded='true'] {height:500px}
+
+/* 人物仍是现有 WebM，不重画、不加底托。 */
 [data-salary-meter] .sm-mascot,
 [data-salary-meter] .sm-mascot.sm-video-mode {
-  display:block;left:50%;top:20px;width:440px;height:300px;
+  display:block;left:50%;top:16px;width:440px;height:300px;
   transform:translateX(-50%) scale(var(--pet-scale));transform-origin:center bottom;
   overflow:hidden;-webkit-app-region:no-drag;z-index:0;
 }
+[data-salary-meter][data-animation='off'] .sm-mascot{display:none}
+
 [data-salary-meter] .sm-bubble {
-  display:block;top:calc(300px - 220px * var(--pet-scale));left:60%;right:8px;
+  display:block;top:calc(292px - 220px * var(--pet-scale));left:60%;right:8px;
   transform:none;max-width:150px;white-space:normal;overflow:visible;
-  font-size:12px;line-height:1.6;padding:10px 13px;border-radius:16px 16px 16px 4px;
-  background:var(--sm-bg);color:var(--sm-text);box-shadow:0 4px 14px #00000008;
+  font-size:12px;line-height:1.6;padding:9px 12px;border-radius:14px 14px 14px 4px;
+  background:var(--sm-panel);color:var(--sm-text);border:1px solid var(--sm-border);
+  box-shadow:0 5px 16px #1020331c;
 }
-[data-salary-meter] .sm-bubble:after {content:'';position:absolute;left:-7px;bottom:7px;border-right:8px solid var(--sm-bg);border-top:7px solid transparent}
+[data-salary-meter] .sm-bubble:after {
+  content:'';position:absolute;left:-7px;bottom:7px;
+  border-right:8px solid var(--sm-panel);border-top:7px solid transparent;
+}
 [data-salary-meter] .sm-bubble[hidden] {display:none}
+
 /* 余粮：不要容器，数字直接浮在人物脚下，底下一条细线。
    用户 23:14 定：涨钱数字往上滚、变绿、箭头朝上；扣钱往下滚、变红、箭头朝下。 */
 [data-salary-meter] .sm-balance {
@@ -31,12 +41,12 @@
   text-shadow:0 1px 1px #0008;
 }
 [data-salary-meter][data-theme='light'] .sm-balance {color:#353b48;text-shadow:none}
-[data-salary-meter][data-theme='gold'] .sm-balance {color:var(--sm-text)}
+[data-salary-meter][data-theme='gold'] .sm-balance {color:#d6b36a}
 [data-salary-meter] .sm-balance::after {
   content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:214px;height:1px;pointer-events:none;
   background:linear-gradient(90deg,transparent,rgba(116,138,170,.55),transparent);
 }
-[data-salary-meter] .sm-balance:focus-visible{outline:2px solid var(--sm-blue);outline-offset:6px;border-radius:8px}
+[data-salary-meter] .sm-balance:focus-visible{outline:2px solid var(--sm-balance-focus);outline-offset:6px;border-radius:8px}
 [data-salary-meter] .sm-food-label{font-size:15px;font-weight:400;margin:0;color:inherit;letter-spacing:0}
 [data-salary-meter] .sm-money {
   display:inline-flex;align-items:baseline;gap:1px;
@@ -104,22 +114,84 @@
   -webkit-app-region:no-drag;opacity:.82;transition:opacity .16s ease;
 }
 [data-salary-meter] .sm-balance .sm-toggle:hover{opacity:1}
-[data-salary-meter] .sm-balance .sm-toggle:focus-visible{opacity:1;outline:2px solid var(--sm-blue);outline-offset:3px;border-radius:4px}
-/* 展开明细：三块拼成一张卡，垫一层跟主题同色、96% 不透明的底板。
-   原来 55% 白底，背后的 DSH 窗口文字会透到笔画里，¥0.00 直接发花（大肥鱼 11-07 判定为 bug）。 */
-[data-salary-meter] .sm-top{position:absolute;top:350px;left:85px;width:270px;background:var(--sm-panel,rgba(247,248,250,.96));border-radius:12px 12px 0 0;height:27px;text-shadow:none;font-size:11px}
-[data-salary-meter] .sm-worktime{display:block;top:377px;bottom:auto;left:85px;right:auto;width:270px;height:30px;background:var(--sm-panel,rgba(247,248,250,.96));padding:0 11px;text-shadow:none;font-size:11px}
-[data-salary-meter] .sm-worktime progress{display:block}
-[data-salary-meter] .sm-ledger{display:flex;top:407px;bottom:auto;left:85px;right:auto;width:270px;height:43px;padding:0 11px;background:var(--sm-panel,rgba(247,248,250,.96));border-radius:0 0 12px 12px;border-top:1px solid rgba(116,138,170,.22);text-shadow:none;font-size:11px}
-[data-salary-meter] .sm-ledger label{font-size:10px}
-[data-salary-meter] .sm-ledger b{font-size:14px}
-[data-salary-meter][data-expanded='false'] .sm-top,
-[data-salary-meter][data-expanded='false'] .sm-ledger,
-[data-salary-meter][data-expanded='false'] .sm-worktime{display:none}
-[data-salary-meter] .sm-compact-expense{display:none}
-[data-salary-meter] .sm-error{top:452px;bottom:auto;left:85px;right:85px;border-radius:8px;font-size:10px}
-/* 收起态窗口只有 390 高，错误提示得放回可见范围，不然读不到数据也没人知道 */
-[data-salary-meter][data-expanded='false'] .sm-error{top:345px}
+[data-salary-meter] .sm-balance .sm-toggle:focus-visible{opacity:1;outline:2px solid var(--sm-balance-focus);outline-offset:3px;border-radius:4px}
+
+[data-salary-meter] .sm-balance{--sm-balance-focus:#8398ff}
+[data-salary-meter][data-theme='light'] .sm-balance{--sm-balance-focus:#4c6ef5}
+[data-salary-meter][data-theme='gold'] .sm-balance{--sm-balance-focus:#c9a227}
+/* 展开账目：300 × 144 一张卡。标题/时间、倒计时/进度、下方两列收支。
+   卡片用主题实色，避开背后窗口文字透进笔画。 */
+[data-salary-meter] .sm-ledger{
+  position:absolute;top:348px;left:50%;transform:translateX(-50%);
+  width:300px;height:144px;padding:13px 15px 12px;z-index:4;
+  display:flex;flex-direction:column;text-align:left;align-items:stretch;justify-content:flex-start;
+  background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:12px;
+  box-shadow:0 6px 16px #13283e16;color:var(--sm-text);text-shadow:none;
+  font-size:11px;line-height:1.35;-webkit-app-region:no-drag;
+}
+[data-salary-meter] .sm-ledger-head{
+  display:flex;flex-direction:row;align-items:center;justify-content:space-between;
+  height:18px;flex:none;gap:8px;
+}
+[data-salary-meter] .sm-ledger-title{font-size:12px;font-weight:500;letter-spacing:.01em}
+[data-salary-meter] .sm-ledger-meta{
+  display:flex;align-items:center;gap:2px;color:var(--sm-muted);
+  font-size:11px;font-variant-numeric:tabular-nums;
+}
+[data-salary-meter] .sm-clock{font-size:11px;color:inherit;letter-spacing:.01em}
+[data-salary-meter] .sm-ledger .sm-icon{
+  width:20px;height:20px;padding:0;border:0;border-radius:5px;background:transparent;
+  color:var(--sm-muted);font-size:13px;line-height:20px;text-align:center;cursor:pointer;
+  font-family:inherit;
+}
+[data-salary-meter] .sm-ledger .sm-icon:hover{background:var(--sm-line);color:var(--sm-text)}
+[data-salary-meter] .sm-ledger .sm-icon:focus-visible{outline:2px solid var(--sm-accent);outline-offset:1px}
+[data-salary-meter] .sm-ledger-timing{margin-top:11px;flex:none}
+[data-salary-meter] .sm-ledger-count{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  color:var(--sm-muted);font-size:11px;white-space:nowrap;
+}
+[data-salary-meter] .sm-ledger-count b{
+  color:var(--sm-text);font-size:11px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:.02em;
+}
+[data-salary-meter] .sm-ledger progress{
+  display:block;width:100%;height:3px;margin:7px 0 0;border:0;border-radius:3px;
+  background:var(--sm-line);appearance:none;
+}
+[data-salary-meter] .sm-ledger progress::-webkit-progress-bar{background:var(--sm-line);border-radius:3px}
+[data-salary-meter] .sm-ledger progress::-webkit-progress-value{background:var(--sm-accent);border-radius:3px}
+[data-salary-meter] .sm-ledger progress::-moz-progress-bar{background:var(--sm-accent);border-radius:3px}
+[data-salary-meter] .sm-ledger[data-countdown='false'] .sm-ledger-timing{margin-top:10px}
+[data-salary-meter] .sm-ledger[data-countdown='false'] .sm-ledger-count b{color:var(--sm-muted);font-weight:400}
+[data-salary-meter] .sm-ledger[data-countdown='false'] progress{display:none}
+[data-salary-meter] .sm-ledger-money{
+  display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:10px;
+  margin-top:auto;padding-top:8px;
+}
+[data-salary-meter] .sm-ledger-money > div{display:flex;flex-direction:column;min-width:0}
+[data-salary-meter] .sm-ledger-label{
+  display:block;margin-bottom:3px;color:var(--sm-muted);font-size:10.5px;line-height:1.2;
+  white-space:nowrap;
+}
+[data-salary-meter] .sm-ledger-money b{
+  display:block;font-size:16px;font-weight:500;line-height:1.15;letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+  font-family:'Segoe UI','Salary Noto Sans SC',system-ui,sans-serif;
+}
+[data-salary-meter] .sm-expense{text-align:right}
+[data-salary-meter] .sm-expense b{color:var(--sm-cost)}
+[data-salary-meter] .sm-ledger[data-countdown='false'] .sm-ledger-money{padding-top:10px}
+
+[data-salary-meter][data-expanded='false'] .sm-ledger{display:none}
+
+[data-salary-meter] .sm-error{
+  position:absolute;left:50%;top:260px;bottom:auto;transform:translateX(-50%);
+  width:300px;margin:0;padding:5px 8px;border:1px solid var(--sm-border);border-radius:8px;
+  background:var(--sm-panel);color:#ef8888;font-size:10px;line-height:1.35;z-index:6;
+  text-align:center;
+}
+[data-salary-meter] .sm-error[hidden]{display:none}
+
 @media(prefers-reduced-motion:reduce){
   .sm-video{transition:none}
   [data-salary-meter] #balanceValue{transition:none}
@@ -128,12 +200,5 @@
   [data-salary-meter] .sm-money,
   [data-salary-meter] .sm-delta{transition:none}
   [data-salary-meter] .sm-delta .sm-chev{animation:none!important}
+  [data-salary-meter] .sm-caret{transition:none}
 }
-/* 已确认的紧凑账目：休息日合并状态，不占空进度行。 */
-[data-salary-meter] .sm-top{height:25px;border-radius:8px 8px 0 0}
-[data-salary-meter] .sm-worktime{top:375px;height:25px}
-[data-salary-meter] .sm-worktime progress{height:2px;margin-top:4px}
-[data-salary-meter] .sm-ledger{top:400px;height:43px;border-radius:0 0 8px 8px;border-top:0}
-[data-salary-meter][data-rest='true'] .sm-worktime{display:none}
-[data-salary-meter][data-rest='true'] .sm-ledger{top:375px}
-

@@ -74,14 +74,12 @@
   }
 
   /* 设置浮层：铺满整个窗口，Windows 这边开第二个 webview 会卡住，所以走同一窗口。
-     用户 09:04 选磨砂浮层：半透明 + 背景模糊，能透出后面的人物和壁纸。 */
+     2026-11-10：改为和挂件同一套三主题实色，不再用浅色磨砂底压深色主题。 */
   .sm-layer{
     position:absolute;inset:0;
     display:flex;flex-direction:column;
-    background:rgba(250,251,253,.84);
-    backdrop-filter:blur(50px) saturate(1.4);
-    -webkit-backdrop-filter:blur(50px) saturate(1.4);
-    border:1px solid rgba(255,255,255,.5);
+    background:var(--panel,#202c3d);
+    border:1px solid var(--rule,#455872);
     border-radius:14px;
     overflow:hidden;
     z-index:50;
@@ -91,30 +89,33 @@
   body.settings-open [data-salary-meter]{visibility:hidden;pointer-events:none;-webkit-app-region:no-drag}
   .sm-layer,.sm-layer iframe{-webkit-app-region:no-drag}
   .sm-layer-bar{
-    height:26px;
+    height:48px;
     flex:none;
-    display:flex;align-items:center;justify-content:space-between;
-    padding:0 6px 0 12px;
-    background:rgba(255,255,255,.4);
-    border-bottom:1px solid rgba(20,30,45,.09);
-    color:#5b636e;
-    font-size:11px;
-    letter-spacing:.08em;
+    display:flex;align-items:center;
+    padding:0 14px 0 24px;
+    background:var(--panel,#202c3d);
+    border-bottom:1px solid var(--rule,#455872);
+    color:var(--ink,#edf3ff);
+    font-size:18px;
+    font-weight:600;
+    letter-spacing:0;
     -webkit-app-region:drag;
   }
   .sm-layer-bar button{
     -webkit-app-region:no-drag;
-    width:24px;height:20px;
-    border:0;border-radius:5px;
+    width:30px;height:30px;
+    margin-left:4px;
+    border:0;border-radius:8px;
     background:transparent;
-    color:#5b636e;
-    font-size:15px;line-height:18px;
+    color:var(--ink-2,#c1d0e5);
+    font-size:20px;line-height:28px;
     cursor:pointer;
   }
-  .sm-layer-bar button:hover{background:rgba(20,30,45,.08);color:#1b1f24}
-  .sm-layer iframe{flex:1;width:100%;border:0;background:transparent}
-  .sm-layer-bar{height:44px;padding:6px 16px 0 22px;font-size:18px;letter-spacing:0;border-bottom:0}
-  .settings-save-note{margin-left:auto;margin-right:12px;font-size:10px}
+  .sm-layer-bar button:hover{background:var(--rule,#455872);color:var(--ink,#edf3ff)}
+  .sm-layer-bar button:focus-visible{outline:2px solid var(--accent,#9eb6e4);outline-offset:1px}
+  .sm-layer iframe{flex:1;width:100%;border:0;background:transparent;overflow:auto}
+  .sm-layer-bar{height:48px;padding:0 14px 0 24px;font-size:18px;letter-spacing:0;border-bottom:1px solid var(--rule,#455872)}
+  .settings-save-note{margin-left:auto;margin-right:10px;font-size:11px;font-weight:400;color:var(--ink-2,#c1d0e5)}
 </style>
 <link rel="stylesheet" href="assets/desktop-pet.css">
 <link rel="stylesheet" href="assets/fonts.css">
@@ -123,11 +124,12 @@
 <body>
 
 <section data-salary-meter data-theme="dark" data-expanded="false" aria-label="打工养肥鱼" id="widget">
-  <div class="sm-top" id="topRow">
-    <span class="sm-title" id="statusTitle" title="上班中">碗里还剩</span>
-    <time class="sm-clock" id="clockText">00:00:00</time>
-    <button class="sm-icon" id="settingsBtn" title="设置" aria-label="设置">⋯</button>
-  </div>
+  <button class="sm-mascot" id="mascotBtn" aria-label="鲸鱼娘">
+    <span class="sm-stage" id="petStage" hidden>
+      <video class="sm-video" id="petVideoA" muted playsinline preload="auto" aria-hidden="true"></video>
+      <video class="sm-video" id="petVideoB" muted playsinline preload="auto" aria-hidden="true"></video>
+    </span>
+  </button>
 
   <div class="sm-balance" id="balanceRow" role="button" tabindex="0" aria-label="查看今日账目" title="当日工资减去已统计的模型花费估算">
     <small class="sm-food-label" id="balanceLabel">鱼粮</small>
@@ -138,31 +140,27 @@
     <span id="toggleBtn" class="sm-toggle" role="button" tabindex="0" aria-label="展开账目" aria-expanded="false"><span id="petStatus"></span></span>
   </div>
 
-  <div class="sm-worktime" id="worktimeRow">
-    <div class="sm-worktime-row">
-      <span id="countdownText">距下班 <b>--:--:--</b></span>
-      <span class="sm-compact-expense" id="expenseCompact"></span>
+  <div class="sm-ledger" id="ledgerRow" data-countdown="true" role="region" aria-label="今日账目">
+    <div class="sm-ledger-head">
+      <b class="sm-ledger-title" id="statusTitle">今日账目</b>
+      <span class="sm-ledger-meta"><time class="sm-clock" id="clockText">00:00:00</time><button class="sm-icon" id="settingsBtn" title="设置" aria-label="设置">⋯</button></span>
     </div>
-    <progress id="progressBar" value="0" max="1" aria-label="今日工作进度"></progress>
+    <div class="sm-ledger-timing" id="worktimeRow">
+      <div class="sm-ledger-count"><span id="countdownLabel">距下班</span><b id="countdownText">--:--:--</b></div>
+      <progress id="progressBar" value="0" max="1" aria-label="今日工作进度"></progress>
+    </div>
+    <div class="sm-ledger-money">
+      <div>
+        <span class="sm-ledger-label">今日入账</span>
+        <b id="earnedText">¥0.00</b>
+      </div>
+      <div class="sm-expense">
+        <span class="sm-ledger-label" id="expenseLabel">肥鱼饭钱 · 估算</span>
+        <b id="spentText">¥−0.00</b>
+      </div>
+    </div>
   </div>
 
-  <div class="sm-ledger" id="ledgerRow">
-    <div>
-      <label>今日入账</label>
-      <b id="earnedText">¥0.00</b>
-    </div>
-    <div class="sm-expense">
-      <label id="expenseLabel">肥鱼饭钱（估算）</label>
-      <b id="spentText">¥−0.00</b>
-    </div>
-  </div>
-
-  <button class="sm-mascot" id="mascotBtn" aria-label="鲸鱼娘">
-    <span class="sm-stage" id="petStage" hidden>
-      <video class="sm-video" id="petVideoA" muted playsinline preload="auto" aria-hidden="true"></video>
-      <video class="sm-video" id="petVideoB" muted playsinline preload="auto" aria-hidden="true"></video>
-    </span>
-  </button>
   <div class="sm-bubble" id="bubble">再吃一口就收工。</div>
 
   <p class="sm-error" id="errorBox" role="alert" hidden></p>

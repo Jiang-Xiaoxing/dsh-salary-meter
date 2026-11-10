@@ -123,8 +123,8 @@ use tauri::{
 const WIN_W: f64 = 440.0;
 const WIN_COLLAPSED_H: f64 = 390.0;
 const WIN_EXPANDED_H: f64 = 500.0;
-/* 设置页：内容（量过）555 高 + 顶部 45 的标题栏 + 6 余量；设成固定值比原来 820 少一整块空白 */
-const WIN_SETTINGS_H: f64 = 606.0;
+/* 设置页实际内容约 608 高，加 50px 标题与边框；小屏按工作区缩短并在内部滚动。 */
+const WIN_SETTINGS_H: f64 = 660.0;
 
 /// 整台电脑的键鼠空闲了多少毫秒。彩蛋判据和休息日「打游戏」那段的取舍都靠它。
 #[cfg(target_os = "windows")]
@@ -560,6 +560,17 @@ fn set_expanded(app: AppHandle, expanded: bool) -> Config {
     cfg.expanded = expanded;
     save_config(&app, &cfg);
     apply_window_size(&app, expanded);
+    // 窗口变高后底部的 300×144 账目卡可能压出工作区；set_size 之后实时尺寸
+    // 还没更新，按目标尺寸夹一次，靠近屏幕底部展开时整张卡仍然看得见。
+    if let Some(window) = app.get_webview_window("main") {
+        let settings_open = app
+            .try_state::<AppState>()
+            .map(|state| state.settings_open.load(Ordering::Relaxed))
+            .unwrap_or(false);
+        if !settings_open {
+            clamp_to_monitor(&window, physical_window_size(&window, expanded, cfg.animation));
+        }
+    }
     let _ = app.emit("config-changed", &cfg);
     cfg
 }
@@ -572,6 +583,13 @@ fn apply_window_size(app: &AppHandle, expanded: bool) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
+    // 设置页是同一个主窗口撑开的。改配置时若这里无条件按挂件高度设一次，
+    // 设置页会被压回 390/500 高、底部被裁掉；开设置时一律交给 set_mode 管。
+    if let Some(state) = app.try_state::<AppState>() {
+        if state.settings_open.load(Ordering::Relaxed) {
+            return;
+        }
+    }
     let height = win_height(load_config(app).animation, expanded);
     let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
 }
@@ -610,6 +628,17 @@ fn physical_window_size(window: &tauri::WebviewWindow, expanded: bool, anim: boo
     tauri::PhysicalSize::new(sized, h)
 }
 
+/// 设置页高度：目标 660，但不能超出当前屏幕工作区；屏幕再矮也让 iframe 内部滚动，
+/// 不把标题栏或底部说明硬裁在窗口外。
+fn settings_window_height(work_height: f64) -> f64 {
+    if !work_height.is_finite() || work_height <= 0.0 {
+        return WIN_SETTINGS_H;
+    }
+    WIN_SETTINGS_H
+        .min((work_height - 24.0).max(280.0))
+        .min(work_height)
+}
+
 /// 设置页现在是主窗口里的浮层：让前端把它撑开就行，不再开第二个 webview
 #[tauri::command]
 fn open_settings(app: AppHandle) {
@@ -628,15 +657,15 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
             .store(mode == "settings", Ordering::Relaxed);
     }
     if mode == "settings" {
-        // 设置页比屏幕还高就按屏幕压一下，标题栏和关闭按钮得一直看得见
+        // 设置页比屏幕还高就按工作区压一下，标题栏和关闭按钮得一直看得见
         let scale = window.scale_factor().unwrap_or(1.0);
-        let monitor_height = window
+        let work_height = window
             .current_monitor()
             .ok()
             .flatten()
-            .map(|monitor| monitor.size().height as f64 / scale)
-            .unwrap_or(WIN_SETTINGS_H);
-        let height = WIN_SETTINGS_H.min(monitor_height - 40.0).max(520.0);
+            .map(|monitor| monitor.work_area().size.height as f64 / scale)
+            .unwrap_or(WIN_SETTINGS_H + 24.0);
+        let height = settings_window_height(work_height);
         let _ = window.set_size(tauri::LogicalSize::new(466.0, height));
         // 用刚算出来的尺寸夹取：set_size 之后实时尺寸还没更新，读到的还是旧值
         let settings = tauri::PhysicalSize::new(
@@ -645,13 +674,7 @@ fn set_mode(app: AppHandle, mode: String) -> bool {
         );
         clamp_to_monitor(&window, settings);
     } else {
-        let expanded = load_config(&app).expanded;
-        let height = if expanded {
-            WIN_EXPANDED_H
-        } else {
-            WIN_COLLAPSED_H
-        };
-        let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
+        apply_window_size(&app, load_config(&app).expanded);
     }
     true
 }
@@ -1000,4 +1023,26 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("计价器启动失败");
+}
+
+#[cfg(test)]
+mod ui_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn settings_height_never_exceeds_work_area() {
+        assert_eq!(settings_window_height(1080.0), WIN_SETTINGS_H);
+        assert_eq!(settings_window_height(600.0), 576.0);
+        assert_eq!(settings_window_height(400.0), 376.0);
+        assert_eq!(settings_window_height(260.0), 260.0);
+        assert_eq!(settings_window_height(0.0), WIN_SETTINGS_H);
+    }
+
+    #[test]
+    fn widget_height_does_not_change_with_animation_switch() {
+        assert_eq!(win_height(false, false), WIN_COLLAPSED_H);
+        assert_eq!(win_height(true, false), WIN_COLLAPSED_H);
+        assert_eq!(win_height(false, true), WIN_EXPANDED_H);
+        assert_eq!(win_height(true, true), WIN_EXPANDED_H);
+    }
 }

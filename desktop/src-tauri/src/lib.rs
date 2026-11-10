@@ -151,6 +151,8 @@ fn user_idle_ms() -> u64 { 0 }
 
 /* ------------------------------------------------------------------ 配置 */
 
+fn default_true() -> bool { true }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 struct Config {
@@ -164,6 +166,9 @@ struct Config {
     rest_mode: String,
     theme: String,
     character: String,
+    /// 关掉就不加载人物视频，只留鱼粮条和账目（省内存/CPU）。
+    #[serde(default = "default_true")]
+    animation: bool,
     #[serde(rename = "petScale")]
     pet_scale: f64,
     expanded: bool,
@@ -182,6 +187,7 @@ impl Default for Config {
             rest_mode: String::new(),
             theme: "dark".to_string(),
             character: "webm".to_string(),
+            animation: true,
             pet_scale: 130.0,
             expanded: false,
         }
@@ -534,6 +540,9 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
             _ => "webm".to_string(),
         };
     }
+    if let Some(v) = patch.get("animation").and_then(|v| v.as_bool()) {
+        cfg.animation = v;
+    }
 
     if let Some(v) = patch.get("petScale").and_then(|v| v.as_f64()) {
         cfg.pet_scale = v.clamp(80.0, 160.0);
@@ -555,15 +564,15 @@ fn set_expanded(app: AppHandle, expanded: bool) -> Config {
     cfg
 }
 
+fn win_height(_anim: bool, expanded: bool) -> f64 {
+    if expanded { WIN_EXPANDED_H } else { WIN_COLLAPSED_H }
+}
+
 fn apply_window_size(app: &AppHandle, expanded: bool) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    let height = if expanded {
-        WIN_EXPANDED_H
-    } else {
-        WIN_COLLAPSED_H
-    };
+    let height = win_height(load_config(app).animation, expanded);
     let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height));
 }
 
@@ -588,9 +597,9 @@ fn clamp_to_monitor(window: &tauri::WebviewWindow, size: tauri::PhysicalSize<u32
 
 /// 按配置算窗口的物理尺寸。夹取要用「将来」的尺寸，不能读实时尺寸：
 /// set_size 之后窗口尺寸要过一会儿才更新，读到的还是旧值，夹完仍旧会露出屏幕外。
-fn physical_window_size(window: &tauri::WebviewWindow, expanded: bool) -> tauri::PhysicalSize<u32> {
+fn physical_window_size(window: &tauri::WebviewWindow, expanded: bool, anim: bool) -> tauri::PhysicalSize<u32> {
     let scale = window.scale_factor().unwrap_or(1.0);
-    let height = if expanded { WIN_EXPANDED_H } else { WIN_COLLAPSED_H };
+    let height = win_height(anim, expanded);
     let sized = (WIN_W * scale).round() as u32;
     let h = (height * scale).round() as u32;
     if sized == 0 || h == 0 {
@@ -954,7 +963,7 @@ pub fn run() {
 
             apply_window_size(app.handle(), cfg.expanded);
             if let Some(win) = app.get_webview_window("main") {
-                clamp_to_monitor(&win, physical_window_size(&win, cfg.expanded));
+                clamp_to_monitor(&win, physical_window_size(&win, cfg.expanded, cfg.animation));
                 if let Ok(final_pos) = win.outer_position() {
                     startup_log(
                         app.handle(),

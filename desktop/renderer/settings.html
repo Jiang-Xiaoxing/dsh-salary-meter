@@ -60,6 +60,10 @@
   .field{display:flex;flex-direction:column;gap:5px}
   .field > label{font-size:11px;color:var(--ink-2);letter-spacing:.05em}
 
+  .check-line{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--rule);border-radius:8px;background:rgba(255,255,255,.42);cursor:pointer;font-size:12px;color:var(--ink)}
+  .check-line input{width:15px;height:15px;accent-color:var(--amber);cursor:pointer}
+  .check-line small{color:var(--ink-3);font-size:11px;margin-left:auto}
+
   input[type=number],input[type=time]{
     width:100%;
     font-family:'Salary Noto Sans SC',sans-serif;
@@ -197,6 +201,7 @@
 <section class="settings-section"><h2>挂件外观</h2>
 <div class="field setting-line"><label>配色</label><div class="seg" id="seg"><button type="button" data-theme="dark">深色</button><button type="button" data-theme="light">浅白</button><button type="button" data-theme="gold">暗金</button></div></div>
 <div class="field size-line"><label for="petScale">大小 <output id="petScaleValue">130%</output></label><input id="petScale" type="range" min="80" max="160" step="5" value="130"><button id="resetPetScale" type="button">恢复默认</button></div>
+<label class="check-line"><input type="checkbox" id="animation" checked><span>加载人物动画</span><small>关掉只留鱼粮条，省内存</small></label>
 </section><div class="diag" id="diag"></div></div>
 <div class="stats">
 <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
@@ -314,6 +319,7 @@
       restMode: currentRest,
       theme: currentTheme,
       character: 'webm',
+      animation: document.getElementById('animation').checked,
       petScale: Number(document.getElementById("petScale").value)
     };
   }
@@ -366,6 +372,7 @@
     setRest(c.restMode || (c.weekend ? 'none' : 'double'));    setTheme(c.theme);
     document.getElementById("petScale").value = c.petScale || 130;
     document.getElementById("petScaleValue").textContent = (c.petScale || 130) + "%";
+    document.getElementById("animation").checked = c.animation !== false;
   }
 
   document.getElementById('petScale').addEventListener('input', function () {
@@ -377,6 +384,7 @@
     document.getElementById('petScaleValue').textContent = '130%';
     push();
   });
+  document.getElementById('animation').addEventListener('change', push);
   var timer = null;
   function push() {
     cfg = readForm();

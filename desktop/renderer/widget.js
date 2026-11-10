@@ -10,7 +10,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 (function () {
   'use strict';
 
-  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark', character: 'webm', petScale: 130, expanded: false };
+  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark', character: 'webm', animation: true, petScale: 130, expanded: false };
 
   /* --sm-panel 是账目区（今日账目 / 进度 / 入账）专用底板：
      跟主题同色，但不透明度 96%，压住背后窗口透上来的文字。
@@ -554,6 +554,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (!el.settingsLayer.hidden) { lastPoke = performance.now(); return; }
     // 收起态看不到人物也看不到气泡，清零只会像故障，所以这个彩蛋只在展开时掷
     if (!expanded) return;
+    // 关掉人物动画时没有人物也没有气泡，彩蛋只会让余额莫名跳 0，不掷
+    if (!useVideo()) return;
     if (eggClipActive()) return;
     const res = rollIdleEgg({ lastPoke, now: performance.now(), lastRoll: idleRollAt, rand: Math.random() });
     idleRollAt = res.lastRoll;
@@ -736,7 +738,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   // 人物只有视频这一种画法：视频播不出来时人物先隐藏，60 秒后自动重试，不再退回图集
   function useVideo() {
-    return performance.now() >= videoRetryAt;
+    return cfg.animation !== false && performance.now() >= videoRetryAt;
   }
 
   function currentScene() {
@@ -750,6 +752,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   function syncCharacterVisibility() {
     const video = useVideo();
+    el.widget.dataset.animation = cfg.animation !== false ? 'on' : 'off';
     // 人物只有视频这一种画法；图集已经拿掉，布局固定按视频尺寸算
     el.mascotBtn.classList.add('sm-video-mode');
     el.petStage.hidden = !video;
@@ -759,7 +762,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   // 启动人物：视频立刻播。视频失败期间人物隐藏，等 60 秒重试，不再建图集画布
   function startCharacter() {
     if (!syncCharacterVisibility()) {
-      stopVideos();
+      stopVideos(true);
       return;
     }
     playingClip = null;
@@ -786,7 +789,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     startCharacter();
   }
 
-  function stopVideos() {
+  function stopVideos(release) {
     clearTimeout(videoTimer);
     clearTimeout(videoGuard);
     sceneCurrent = null;
@@ -801,8 +804,12 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     for (const video of el.videos) {
       video.pause();
       video.dataset.on = 'false';
+      // 关掉动画/视频失败时把 src 也摘掉，让解码器真正释放，不然内存一直占着
+      if (release) {
+        try { video.removeAttribute('src'); video.load(); } catch (error) {}
+      }
     }
-    logLine('停掉所有视频');
+    logLine(release ? '停掉所有视频并释放' : '停掉所有视频');
   }
 
   /* 场景调度：想播的和正在播的分开。
@@ -944,7 +951,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     loadingKey = null;
     loadingSrc = null;
     videoRetryAt = performance.now() + VIDEO_RETRY_MS;
-    stopVideos();
+    stopVideos(true);
     syncCharacterVisibility();
   }
 
@@ -1038,7 +1045,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       if (!next) return;
       cfg = Object.assign({}, DEF, next);
       applyTheme();
-      if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }
+      const animKey = cfg.animation !== false ? 'webm' : 'off';
+      if (animKey !== characterApplied) { characterApplied = animKey; applyCharacter(); }
       applyExpanded();
       paint();
     });
@@ -1082,7 +1090,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
         }
         lastExpense = today.expense;
         applyTheme();
-        if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }
+        const animKey = cfg.animation !== false ? 'webm' : 'off';
+      if (animKey !== characterApplied) { characterApplied = animKey; applyCharacter(); }
         if (Date.now() > toggleGuardUntil && !!cfg.expanded !== expanded) {
           expanded = !!cfg.expanded;
           applyExpanded();

@@ -10,15 +10,33 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 (function () {
   'use strict';
 
-  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark', character: 'webm', petScale: 130, expanded: false };
+  const DEF = { salary: 5000, days: 22, start: '09:00', end: '18:00', lunch: 1, weekend: false, restMode: 'double', theme: 'dark', character: 'webm', animation: true, petScale: 130, expanded: false };
 
   /* --sm-panel 是账目区（今日账目 / 进度 / 入账）专用底板：
-     跟主题同色，但不透明度 96%，压住背后窗口透上来的文字。
-     人物和余粮大数字不套这层，保持原来的半透明质感。 */
+     跟主题同色，但不透明度 97%，压住背后窗口透上来的文字。
+     人物和余粮大数字不套这层，保持原来的轻量质感。 */
   const PALETTES = {
-    dark: { '--sm-bg': '#232324', '--sm-panel': 'rgba(35,35,36,.96)', '--sm-text': '#e9ebf2', '--sm-muted': '#9398a6', '--sm-line': '#ffffff17', '--dsw-specific-bubble': '#34436c', '--sm-blue': '#8398ff' },
-    light: { '--sm-bg': '#f7f8fa', '--sm-panel': 'rgba(247,248,250,.96)', '--sm-text': '#1f2329', '--sm-muted': '#6b7280', '--sm-line': '#00000014', '--dsw-specific-bubble': '#dfe7f7', '--sm-blue': '#4c6ef5' },
-    gold: { '--sm-bg': '#1f1a13', '--sm-panel': 'rgba(31,26,19,.96)', '--sm-text': '#d6b36a', '--sm-muted': '#9c8a63', '--sm-line': '#ffffff14', '--dsw-specific-bubble': '#3a2f1d', '--sm-blue': '#c9a227' },
+    dark: {
+      '--sm-bg': '#202c3d', '--sm-panel': 'rgba(32,44,61,.97)', '--sm-text': '#edf3ff',
+      '--sm-muted': '#c1d0e5', '--sm-line': '#455872', '--sm-border': '#455872',
+      '--sm-accent': '#9eb6e4', '--sm-cost': '#e8c18d', '--dsw-specific-bubble': '#2b3b52',
+      '--sm-blue': '#9eb6e4', '--sm-balance-shadow': '0 1px 2px #172132,1px 0 1px #172132,-1px 0 1px #172132',
+      '--sm-balance-stroke': '.2px #172132',
+    },
+    light: {
+      '--sm-bg': '#ffffff', '--sm-panel': '#ffffff', '--sm-text': '#263c5d',
+      '--sm-muted': '#536b88', '--sm-line': '#e3eaf4', '--sm-border': '#d6e1ee',
+      '--sm-accent': '#6882bd', '--sm-cost': '#815d36', '--dsw-specific-bubble': '#eef3fa',
+      '--sm-blue': '#6882bd', '--sm-balance-shadow': '0 1px 2px rgba(255,255,255,.5),0 0 1px rgba(255,255,255,.6)',
+      '--sm-balance-stroke': '.2px rgba(255,255,255,.65)',
+    },
+    gold: {
+      '--sm-bg': '#28231d', '--sm-panel': '#28231d', '--sm-text': '#f1d38e',
+      '--sm-muted': '#d1bd98', '--sm-line': '#4a3e2c', '--sm-border': '#60523a',
+      '--sm-accent': '#ddbd71', '--sm-cost': '#f0c77d', '--dsw-specific-bubble': '#3a2f1d',
+      '--sm-blue': '#ddbd71', '--sm-balance-shadow': '0 1px 2px #201b13,1px 0 1px #201b13,-1px 0 1px #201b13',
+      '--sm-balance-stroke': '.35px #201b13',
+    },
   };
 
   const pick = id => document.getElementById(id);
@@ -32,9 +50,11 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     prefix: pick('balancePrefix'),
     value: pick('balanceValue'),
     toggle: pick('toggleBtn'),
+    ledger: pick('ledgerRow'),
+    countdownLabel: pick('countdownLabel'),
     countdown: pick('countdownText'),
-    compactExpense: pick('expenseCompact'),
     bar: pick('progressBar'),
+    worktime: pick('worktimeRow'),
     earned: pick('earnedText'),
     spent: pick('spentText'),
     expenseLabel: pick('expenseLabel'),
@@ -256,17 +276,15 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     // 展开/收起不重新决定人物动作：窗口尺寸由 Rust 改，动画交给调度层，下一帧照常算
   }
 
-  /* 余粮跳动：涨钱往上滚、扣钱往下滚；涨满 1 毛或一扣钱就亮色 + 箭头。
-     用户 23:14 定：加钱像水滴（每分钱微跳、每毛一次绿闪），扣钱像刀切（立刻红闪）。
-     代码审查（Astra）补的三处：跨天/隔夜休眠要重置基准、首屏真实数据到位前不触发动画、动画最短间隔。 */
+  /* 余粮跳动：涨钱往上滚、扣钱往下滚；金额显示的角位进位时绿闪，扣钱红闪。
+     2026-11-10 用户纠正：以小数点后一位（毛钱）为参照，不从上次绿闪的金额累计。
+     跨天/隔夜休眠重置基准，首屏真实数据到位前不触发动画。 */
   let lastAmount = null;
-  let greenMark = null;
   let flashTimer = 0;
   let arrowTimer = 0;
   let changeAt = 0;
   let lastDay = '';
   let basisReady = false;
-  let lastAnimAt = 0;
 
   /* 扣钱冻结：扣钱那一下把数字定住、保持红色；连续一小段时间没有新扣费就算这波结束，
      把这期间涨的工资一次性补回来（一直有新扣费也最多冻 10 秒，免得看着像卡死）。
@@ -409,6 +427,16 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.value.setAttribute('aria-label', '¥' + text);
   }
 
+  // 按当前文本标记小数位，供布局检查识别；用户回退鱼粮栏后与整数使用同一字号。
+  // 金额位数变化时不会把新长出来的整数位错认成小数。
+  function markAmountGlyphs(text) {
+    const dot = text.indexOf('.');
+    slots.forEach((slot, i) => {
+      slot.el.classList.toggle('sm-dot', i === dot);
+      slot.el.classList.toggle('sm-fraction', dot >= 0 && i > dot);
+    });
+  }
+
   // 数字：转动对应格数；符号/小数点：直接换
   function rollSlot(slot, ch, dir) {
     if (slot.kind !== 'digit') { updateChar(slot, ch); return; }
@@ -451,6 +479,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       slots.push(slot);
       el.value.appendChild(slot.el);
     }
+    markAmountGlyphs(text);
     publishAmount(text);
   }
 
@@ -480,9 +509,37 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       }
     }
 
+    /* 极端跳变（例如月薪清零后从 4 亿跳到 −5.00）会让某一位从数字变成负号/
+       小数点，或者反过来。只换掉这些跨类型的格子，其他位照常滚；
+       原来的 updateChar 碰上「数字格没有 glyph」会抛异常，金额直接不刷新。 */
+    const replaced = new Set();
+    let missingSlot = false;
+    for (let i = 0; i < plan.length; i++) {
+      const cell = plan[i];
+      if (cell.kind === 'same' || cell.kind === 'appear' || cell.kind === 'vanish') continue;
+      const slotIndex = i - drops.length;
+      const slot = slots[slotIndex];
+      if (!slot) { missingSlot = true; break; }
+      const nextDigit = cell.to >= '0' && cell.to <= '9';
+      const typeChanged = cell.kind === 'roll'
+        ? slot.kind !== 'digit'
+        : (slot.kind === 'digit') !== nextDigit;
+      if (!typeChanged) continue;
+      const replacement = makeSlot(cell.to);
+      slot.el.replaceWith(replacement.el);
+      slots[slotIndex] = replacement;
+      replaced.add(i);
+    }
+    if (missingSlot) {
+      rebuildAmount(text);
+      animateAmountWidth(before);
+      return;
+    }
+
     for (let i = 0; i < plan.length; i++) {
       const cell = plan[i];
       if (cell.kind === 'appear' || cell.kind === 'vanish') continue;
+      if (replaced.has(i)) continue;
       // plan 下标 → 新字符串里的字符位置：退位只在最左边，所以要减掉
       const slot = slots[i - drops.length];
       if (!slot) continue;
@@ -490,6 +547,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       if (cell.kind === 'roll') rollSlot(slot, cell.to, dir);
       else updateChar(slot, cell.to);
     }
+    markAmountGlyphs(text);
     publishAmount(text);
     animateAmountWidth(before);
   }
@@ -554,6 +612,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (!el.settingsLayer.hidden) { lastPoke = performance.now(); return; }
     // 收起态看不到人物也看不到气泡，清零只会像故障，所以这个彩蛋只在展开时掷
     if (!expanded) return;
+    // 关掉人物动画时没有人物也没有气泡，彩蛋只会让余额莫名跳 0，不掷
+    if (!useVideo()) return;
     if (eggClipActive()) return;
     const res = rollIdleEgg({ lastPoke, now: performance.now(), lastRoll: idleRollAt, rand: Math.random() });
     idleRollAt = res.lastRoll;
@@ -563,22 +623,19 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   function tickMoney(amount, now) {
     const prev = lastAmount;
     lastAmount = amount;
-    if (prev === null || !basisReady) { greenMark = amount; return; }
+    if (prev === null || !basisReady) return;
     const delta = amount - prev;
-    if (Math.abs(delta) < 0.0005) return;
+    if (delta === 0) return;
 
     if (delta < 0) {
+      if (Math.abs(delta) < 0.0005) return;
       // 扣钱不节流——这次漏掉就永远补不回来了
-      greenMark = amount;
       bigFlash('down', 2400);
       return;
     }
-    // 涨钱才节流：paint 是 100ms 一次，金额涨得快的配置下别把 200ms 的滚动反复打断
-    const stamp = performance.now();
-    if (stamp - lastAnimAt < 140) return;
-    lastAnimAt = stamp;
-    if (greenMark === null || amount - greenMark >= 0.1) {
-      greenMark = amount;
+    // 与界面相同地先四舍五入到分，再去掉分位；保留整数，跨元/大额跳变也能识别。
+    // 不能先 floor(amount * 10)：1.299 已显示 1.30，应在这一帧亮绿。
+    if (money(amount).slice(0, -1) !== money(prev).slice(0, -1)) {
       bigFlash('up', 1600);
     }
   }
@@ -595,7 +652,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (dayKey !== lastDay) {
       lastDay = dayKey;
       lastAmount = null;
-      greenMark = null;
       holdAmount = null;
       holdStartAt = 0;
       holdQuietUntil = 0;
@@ -622,10 +678,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       // 不管有没有补差，都要把冻结时的红色清掉：休息日、午休、下班后工资不涨，
       // 只会在 caught<=0 时不闪绿，红色就永远留着了（Codex 审查第 3 条）
       el.balance.classList.remove('down');
-      if (caught > 0.0005) {
-        greenMark = realAmount;
-        bigFlash('up', 1600); // 补回来的时候闪一下绿，别让人以为数字自己蹦了
-      }
+      // 补回工资也交给下面的 tickMoney，只有显示角位变化才绿闪。
       logLine('扣钱结束，解冻补回 ¥' + money(Math.max(0, caught)) + ' 真实=¥' + money(realAmount) + ' t=' + Math.round(nowP));
     }
     // 冻住时显示层停在扣钱后的数；解冻后跟上真实金额
@@ -635,7 +688,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.statusTitle.textContent = wage.rest ? '今天休息' : '今日账目';
     el.statusTitle.title = wage.status.replace(/\s/g, '');
     el.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-
     // 彩蛋期间：显示层清零（¥0.00），账本和 lastAmount 照原样走，恢复时不闪不提示
     const egg = eggActive();
     const eggClip = eggClipActive();
@@ -661,24 +713,34 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       // 涨钱往上滚、扣钱往下滚；首屏没有基准，按涨处理（反正不动画）
       renderAmount(text, egg ? -1 : lastAmount === null || amount >= lastAmount ? 1 : -1);
     }
-    if (egg) {
-      // 显示被顶掉了，基准跟着真实金额走，恢复的那一下才不会被当成一次涨跌
+    if (egg || frozen) {
+      // 彩蛋/扣费冻结只更新基准；冻结首帧也不能被净上涨的绿色盖掉。
       lastAmount = amount;
-      greenMark = amount;
     } else if (changed || lastAmount === null) {
       tickMoney(amount, now);
     }
 
-    el.countdown.innerHTML = wage.countdownSeconds > 0
-      ? wage.countdownLabel + ' <b>' + duration(wage.countdownSeconds) + '</b>'
-      : '<b>' + wage.countdownLabel + '</b>';
-
+    // 有倒计时才显示进度条；休息日/已收工只留一行状态，卡片高度不变。
+    const hasCountdown = wage.countdownSeconds > .5;
+    el.ledger.dataset.countdown = String(hasCountdown);
+    if (hasCountdown) {
+      el.countdownLabel.textContent = wage.countdownLabel;
+      el.countdown.textContent = duration(wage.countdownSeconds);
+    } else if (wage.rest) {
+      el.countdownLabel.textContent = '今天';
+      el.countdown.textContent = '休息日';
+    } else if (wage.after) {
+      el.countdownLabel.textContent = '今日';
+      el.countdown.textContent = '已收工';
+    } else {
+      el.countdownLabel.textContent = wage.countdownLabel;
+      el.countdown.textContent = '--:--:--';
+    }
     el.bar.value = Math.max(0, Math.min(1, wage.progress));
 
     el.earned.textContent = '¥' + money(wage.earned);
-    el.expenseLabel.textContent = partial ? '偷吃估算（有遗漏）' : '肥鱼饭钱（估算）';
+    el.expenseLabel.textContent = partial ? '肥鱼饭钱 · 有遗漏' : '肥鱼饭钱 · 估算';
     el.spent.textContent = '¥' + (partial ? '≥' : '−') + expenseText();
-    el.compactExpense.textContent = (expanded ? '' : '偷吃 ' + (partial ? '≥' : '≈') + '¥' + expenseText());
 
     {
       if (useVideo() && characterStarted) {
@@ -736,7 +798,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   // 人物只有视频这一种画法：视频播不出来时人物先隐藏，60 秒后自动重试，不再退回图集
   function useVideo() {
-    return performance.now() >= videoRetryAt;
+    return cfg.animation !== false && performance.now() >= videoRetryAt;
   }
 
   function currentScene() {
@@ -750,6 +812,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
 
   function syncCharacterVisibility() {
     const video = useVideo();
+    el.widget.dataset.animation = cfg.animation !== false ? 'on' : 'off';
     // 人物只有视频这一种画法；图集已经拿掉，布局固定按视频尺寸算
     el.mascotBtn.classList.add('sm-video-mode');
     el.petStage.hidden = !video;
@@ -759,7 +822,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   // 启动人物：视频立刻播。视频失败期间人物隐藏，等 60 秒重试，不再建图集画布
   function startCharacter() {
     if (!syncCharacterVisibility()) {
-      stopVideos();
+      stopVideos(true);
       return;
     }
     playingClip = null;
@@ -786,7 +849,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     startCharacter();
   }
 
-  function stopVideos() {
+  function stopVideos(release) {
     clearTimeout(videoTimer);
     clearTimeout(videoGuard);
     sceneCurrent = null;
@@ -801,8 +864,12 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     for (const video of el.videos) {
       video.pause();
       video.dataset.on = 'false';
+      // 关掉动画/视频失败时把 src 也摘掉，让解码器真正释放，不然内存一直占着
+      if (release) {
+        try { video.removeAttribute('src'); video.load(); } catch (error) {}
+      }
     }
-    logLine('停掉所有视频');
+    logLine(release ? '停掉所有视频并释放' : '停掉所有视频');
   }
 
   /* 场景调度：想播的和正在播的分开。
@@ -944,7 +1011,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     loadingKey = null;
     loadingSrc = null;
     videoRetryAt = performance.now() + VIDEO_RETRY_MS;
-    stopVideos();
+    stopVideos(true);
     syncCharacterVisibility();
   }
 
@@ -1026,19 +1093,22 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     paint();
   });
 
-  // 右键大肥鱼也能打开设置：顶上那个「⋯」太难找（用户 20:05 提的）
-  el.mascotBtn.addEventListener('contextmenu', event => {
-    event.preventDefault();
-    event.stopPropagation();
-    openSettings();
-  });
+  // 人物隐藏后也能右键打开设置；只接管可见控件，不接管透明空白或设置表单。
+  for (const target of [el.mascotBtn, el.balance, el.ledger]) {
+    target.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSettings();
+    });
+  }
 
   if (api.onConfig) {
     api.onConfig(next => {
       if (!next) return;
       cfg = Object.assign({}, DEF, next);
       applyTheme();
-      if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }
+      const animKey = cfg.animation !== false ? 'webm' : 'off';
+      if (animKey !== characterApplied) { characterApplied = animKey; applyCharacter(); }
       applyExpanded();
       paint();
     });
@@ -1073,7 +1143,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
           // 首屏 paint 用的是默认配置，等真实数据到了再重建基准，否则会被当成一次涨跌
           basisReady = true;
           lastAmount = null;
-          greenMark = null;
         }
         if (today.expense > lastExpense + 1e-9) {
           busyUntil = Date.now() + 5000;
@@ -1082,7 +1151,8 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
         }
         lastExpense = today.expense;
         applyTheme();
-        if (cfg.character !== characterApplied) { characterApplied = cfg.character; applyCharacter(); }
+        const animKey = cfg.animation !== false ? 'webm' : 'off';
+      if (animKey !== characterApplied) { characterApplied = animKey; applyCharacter(); }
         if (Date.now() > toggleGuardUntil && !!cfg.expanded !== expanded) {
           expanded = !!cfg.expanded;
           applyExpanded();

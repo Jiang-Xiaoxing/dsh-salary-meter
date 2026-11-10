@@ -1,6 +1,6 @@
 {
   "name": "salary-widget",
-  "version": "0.2.1",
+  "version": "0.2.5",
   "description": "桌面工资计价器 · 悬浮挂件",
   "scripts": {
     "tauri": "tauri",

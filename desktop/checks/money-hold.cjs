@@ -9,7 +9,7 @@
 // 断言口径（Codex 两轮审查后收紧）：
 //   - 冻结从「扣钱冻结」日志出现的时刻算，不从金额刚掉下来算
 //   - 冻结期间每一个样本都必须是红的；解冻后每一个样本都不能还带着红
-//   - 补回时必须出现过绿色
+//   - 2026-11-10：补回后只有显示角位变化才绿色，不再每次补差都绿色
 //   - 连续扣费也要在 10 秒上限处强制解冻一次
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path');
@@ -84,7 +84,9 @@ app.whenReady().then(async () => {
     const stillDown = thawed.filter(s => s.cls.includes('down'));
     assert.equal(stillDown.length, 0, '解冻后不该还挂着红色: ' + JSON.stringify(stillDown.slice(0, 5)));
     const sawUp = thawed.some(s => s.cls.includes('up'));
-    assert.ok(sawUp, '补回工资的时候应该闪一下绿色，实际没抓到');
+    const tenth = n => Math.abs(n).toFixed(2).slice(0, -1);
+    const crossedTenth = thawed.some(s => tenth(s.n) !== tenth(frozenValue));
+    assert.equal(sawUp, crossedTenth, '补回工资只在显示角位变化后闪绿');
 
     const last = samples[samples.length - 1];
     assert.ok(last.n > frozenValue + 0.005, `解冻后应该把工资补回来：冻结 ${frozenValue}，最后 ${last.n}`);

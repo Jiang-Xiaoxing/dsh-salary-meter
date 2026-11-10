@@ -276,17 +276,15 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     // 展开/收起不重新决定人物动作：窗口尺寸由 Rust 改，动画交给调度层，下一帧照常算
   }
 
-  /* 余粮跳动：涨钱往上滚、扣钱往下滚；涨满 1 毛或一扣钱就亮色 + 箭头。
-     用户 23:14 定：加钱像水滴（每分钱微跳、每毛一次绿闪），扣钱像刀切（立刻红闪）。
-     代码审查（Astra）补的三处：跨天/隔夜休眠要重置基准、首屏真实数据到位前不触发动画、动画最短间隔。 */
+  /* 余粮跳动：涨钱往上滚、扣钱往下滚；金额显示的角位进位时绿闪，扣钱红闪。
+     2026-11-10 用户纠正：以小数点后一位（毛钱）为参照，不从上次绿闪的金额累计。
+     跨天/隔夜休眠重置基准，首屏真实数据到位前不触发动画。 */
   let lastAmount = null;
-  let greenMark = null;
   let flashTimer = 0;
   let arrowTimer = 0;
   let changeAt = 0;
   let lastDay = '';
   let basisReady = false;
-  let lastAnimAt = 0;
 
   /* 扣钱冻结：扣钱那一下把数字定住、保持红色；连续一小段时间没有新扣费就算这波结束，
      把这期间涨的工资一次性补回来（一直有新扣费也最多冻 10 秒，免得看着像卡死）。
@@ -625,22 +623,19 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
   function tickMoney(amount, now) {
     const prev = lastAmount;
     lastAmount = amount;
-    if (prev === null || !basisReady) { greenMark = amount; return; }
+    if (prev === null || !basisReady) return;
     const delta = amount - prev;
-    if (Math.abs(delta) < 0.0005) return;
+    if (delta === 0) return;
 
     if (delta < 0) {
+      if (Math.abs(delta) < 0.0005) return;
       // 扣钱不节流——这次漏掉就永远补不回来了
-      greenMark = amount;
       bigFlash('down', 2400);
       return;
     }
-    // 涨钱才节流：paint 是 100ms 一次，金额涨得快的配置下别把 200ms 的滚动反复打断
-    const stamp = performance.now();
-    if (stamp - lastAnimAt < 140) return;
-    lastAnimAt = stamp;
-    if (greenMark === null || amount - greenMark >= 0.1) {
-      greenMark = amount;
+    // 与界面相同地先四舍五入到分，再去掉分位；保留整数，跨元/大额跳变也能识别。
+    // 不能先 floor(amount * 10)：1.299 已显示 1.30，应在这一帧亮绿。
+    if (money(amount).slice(0, -1) !== money(prev).slice(0, -1)) {
       bigFlash('up', 1600);
     }
   }
@@ -657,7 +652,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (dayKey !== lastDay) {
       lastDay = dayKey;
       lastAmount = null;
-      greenMark = null;
       holdAmount = null;
       holdStartAt = 0;
       holdQuietUntil = 0;
@@ -684,10 +678,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
       // 不管有没有补差，都要把冻结时的红色清掉：休息日、午休、下班后工资不涨，
       // 只会在 caught<=0 时不闪绿，红色就永远留着了（Codex 审查第 3 条）
       el.balance.classList.remove('down');
-      if (caught > 0.0005) {
-        greenMark = realAmount;
-        bigFlash('up', 1600); // 补回来的时候闪一下绿，别让人以为数字自己蹦了
-      }
+      // 补回工资也交给下面的 tickMoney，只有显示角位变化才绿闪。
       logLine('扣钱结束，解冻补回 ¥' + money(Math.max(0, caught)) + ' 真实=¥' + money(realAmount) + ' t=' + Math.round(nowP));
     }
     // 冻住时显示层停在扣钱后的数；解冻后跟上真实金额
@@ -725,7 +716,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (egg) {
       // 显示被顶掉了，基准跟着真实金额走，恢复的那一下才不会被当成一次涨跌
       lastAmount = amount;
-      greenMark = amount;
     } else if (changed || lastAmount === null) {
       tickMoney(amount, now);
     }
@@ -1153,7 +1143,6 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
           // 首屏 paint 用的是默认配置，等真实数据到了再重建基准，否则会被当成一次涨跌
           basisReady = true;
           lastAmount = null;
-          greenMark = null;
         }
         if (today.expense > lastExpense + 1e-9) {
           busyUntil = Date.now() + 5000;

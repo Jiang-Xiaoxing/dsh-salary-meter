@@ -1103,12 +1103,14 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     paint();
   });
 
-  // 右键大肥鱼也能打开设置：顶上那个「⋯」太难找（用户 20:05 提的）
-  el.mascotBtn.addEventListener('contextmenu', event => {
-    event.preventDefault();
-    event.stopPropagation();
-    openSettings();
-  });
+  // 人物隐藏后也能右键打开设置；只接管可见控件，不接管透明空白或设置表单。
+  for (const target of [el.mascotBtn, el.balance, el.ledger]) {
+    target.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSettings();
+    });
+  }
 
   if (api.onConfig) {
     api.onConfig(next => {

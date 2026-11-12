@@ -568,7 +568,26 @@ fn set_expanded(app: AppHandle, expanded: bool) -> Config {
             .map(|state| state.settings_open.load(Ordering::Relaxed))
             .unwrap_or(false);
         if !settings_open {
-            clamp_to_monitor(&window, physical_window_size(&window, expanded, cfg.animation));
+            /* 展开/收起只改高度，窗口顶部必须钉住：以前这里整块夹到工作区，
+               用户把挂件放在屏幕上方（y 是负数）时，一点击就被拉回屏幕内，
+               看着像「点一下自己弹到下面去了」（2026-11-12 用户录屏）。 */
+            let top = window.outer_position().ok();
+            apply_window_size(&app, expanded);
+            if let Some(p) = top {
+                let _ = window.set_position(PhysicalPosition::new(p.x, p.y));
+                // 只有「展开后底部压出工作区」才整体往上抬，顶部照样不动
+                if let Ok(Some(monitor)) = window.current_monitor() {
+                    let work = monitor.work_area();
+                    let height = (win_height(cfg.animation, expanded) * monitor.scale_factor()).round() as i32;
+                    let work_top = work.position.y;
+                    let work_bottom = work_top + work.size.height as i32;
+                    if p.y + height > work_bottom {
+                        let lifted = (work_bottom - height).max(work_top);
+                        let _ = window.set_position(PhysicalPosition::new(p.x, lifted));
+                        save_position(&app, p.x, lifted);
+                    }
+                }
+            }
         }
     }
     let _ = app.emit("config-changed", &cfg);
@@ -987,6 +1006,12 @@ pub fn run() {
             apply_window_size(app.handle(), cfg.expanded);
             if let Some(win) = app.get_webview_window("main") {
                 clamp_to_monitor(&win, physical_window_size(&win, cfg.expanded, cfg.animation));
+                // 夹回来的位置写回存档：否则下次启动又从屏幕外的旧值开始，每次都要夹一次
+                if let (Some(before), Ok(now_pos)) = (load_position(app.handle()), win.outer_position()) {
+                    if (before.x, before.y) != (now_pos.x, now_pos.y) {
+                        save_position(app.handle(), now_pos.x, now_pos.y);
+                    }
+                }
                 if let Ok(final_pos) = win.outer_position() {
                     startup_log(
                         app.handle(),

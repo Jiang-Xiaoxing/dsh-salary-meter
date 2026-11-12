@@ -20,14 +20,14 @@
 
 | 部分 | 你会看到什么 | 当前发布版本 |
 | --- | --- | --- |
-| Windows 桌面挂件 | 桌面人物、滚轮金额、今日账目、设置、跨天结算 | [desktop-v0.1.5](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.5)（程序内部版本 0.2.5） |
+| Windows 桌面挂件 | 桌面人物、滚轮金额、今日账目、设置、跨天结算 | [desktop-v0.1.6](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)（程序内部版本 0.2.6） |
 | DSH 插件 | 启动/管理已有桌面挂件，并写入任务忙闲心跳；当前不再绘制 DSH 内嵌工资条 | [v0.3.3](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/v0.3.3) |
 
 **想要桌面上的肥鱼，请下载桌面挂件。** 安装 DSH 插件不会自动下载桌面 EXE；要联动运行，需要桌面程序已存在、且插件能找到它。桌面版与插件版有各自的数据和功能范围，升级时也请分别更新。
 
 ### Windows 桌面挂件
 
-在 [桌面版 v0.1.5 下载页](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.5)选择：
+在 [桌面版 v0.1.6 下载页](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)选择：
 
 - **SalaryMeter.exe**：免安装，双击运行。
 - **SalaryMeter-Setup.exe**：安装版。
@@ -73,7 +73,7 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 - **深色、浅白、暗金**三种配色。
 - 人物大小 **80%–160%**，默认 130%，支持恢复默认；可关闭「加载人物动画」，只保留余额条和账目，并释放视频资源。
 - 点击余额条或状态文字展开/收起今日账目；人物不靠展开账目才出现。
-- 拖动挂件可移动并记住位置；点账目右上角 `⋯`、右键人物、余额条或账目卡，或通过托盘菜单进入设置。
+- 拖动挂件可移动并记住位置；展开/收起只改窗口高度，**窗口顶端不会整体跳动**；位置跑出屏幕时启动会自动拉回并存档。点账目右上角 `⋯`、右键人物、余额条或账目卡，或通过托盘菜单进入设置。
 - 托盘支持设置、切换配色、始终置顶、鼠标穿透和退出。**当前托盘没有开机自启开关。**
 
 ### 设置、自检和跨天结算

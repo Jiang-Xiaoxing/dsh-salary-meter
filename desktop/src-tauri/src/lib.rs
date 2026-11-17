@@ -296,14 +296,14 @@ fn migrate_plugin_config() -> Option<Config> {
     Some(cfg)
 }
 
-fn save_config(app: &AppHandle, cfg: &Config) {
+fn save_config(app: &AppHandle, cfg: &Config) -> Result<(), String> {
     let path = data_dir(app).join("config.json");
     if let Some(dir) = path.parent() {
-        let _ = fs::create_dir_all(dir);
+        fs::create_dir_all(dir).map_err(|error| format!("建配置目录失败：{error}"))?;
     }
-    if let Ok(text) = serde_json::to_string_pretty(cfg) {
-        let _ = fs::write(path, text);
-    }
+    let text = serde_json::to_string_pretty(cfg).map_err(|error| format!("序列化配置失败：{error}"))?;
+    fs::write(&path, text).map_err(|error| format!("写配置失败：{error}"))?;
+    Ok(())
 }
 
 fn save_position(app: &AppHandle, x: i32, y: i32) {
@@ -531,7 +531,7 @@ fn get_config(app: AppHandle) -> Config {
 }
 
 #[tauri::command]
-fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
+fn set_config(app: AppHandle, patch: serde_json::Value) -> Result<Config, String> {
     let mut cfg = load_config(&app);
 
     if let Some(v) = patch.get("salary").and_then(|v| v.as_f64()) {
@@ -595,10 +595,10 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
             })
         };
     }
-    save_config(&app, &cfg);
+    save_config(&app, &cfg)?;
     let _ = app.emit("config-changed", &cfg);
     sync_menu(&app, &cfg);
-    cfg
+    Ok(cfg)
 }
 
 /// 展开 / 收起人物：窗口跟着变高，位置尽量留在屏幕里。
@@ -606,7 +606,7 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
 fn set_expanded(app: AppHandle, expanded: bool) -> Config {
     let mut cfg = load_config(&app);
     cfg.expanded = expanded;
-    save_config(&app, &cfg);
+    let _ = save_config(&app, &cfg);
     apply_window_size(&app, expanded);
     // 窗口变高后底部的 300×144 账目卡可能压出工作区；set_size 之后实时尺寸
     // 还没更新，按目标尺寸夹一次，靠近屏幕底部展开时整张卡仍然看得见。
@@ -976,7 +976,7 @@ pub fn run() {
                         "theme" => {
                             let mut cfg = load_config(app);
                             cfg.theme = next_theme(&cfg.theme).to_string();
-                            save_config(app, &cfg);
+                            let _ = save_config(app, &cfg);
                             let _ = app.emit("config-changed", &cfg);
                             sync_menu(app, &cfg);
                         }

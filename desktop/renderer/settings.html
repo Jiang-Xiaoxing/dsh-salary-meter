@@ -251,7 +251,7 @@
   <details class="diagnostics">
     <summary>账目自检与价格信息</summary>
     <p class="checkline" id="checkLine">正在读取…</p>
-    <p class="checkline" id="ledgerSeen">最近读到记录：—</p>
+    <p class="checkline" id="ledgerSeen">最近有写入：—</p>
     <div class="diagRow"><button type="button" id="recompute">重算今天的账</button><span class="checkline" id="checkResult"></span></div>
   </details>
   <div class="diag" id="diag"></div>
@@ -487,6 +487,7 @@
 
   /* ---------------- 自检 ---------------- */
   function showCheck(report) {
+    if (Date.now() < holdCheckUntil) return;
     var today = report.today || {};
     var prices = report.prices || {};
     el.checkLine.textContent = '今日已算 ' + (today.known || 0) + ' 笔、未算 ' + (today.unknown || 0)
@@ -515,7 +516,7 @@
       ? report.tps.toFixed(1) : '—';
   }
 
-  /* 最近读到记录：扫描是按 mtime 挑今天的会话文件，所以这里是“最近一次有会话写入” */
+  /* 最近有写入：扫描按 mtime 挑今天的会话文件，这里显示最近一次会话写入时间 */
   function updateSeen(report) {
     var seen = report && report.last_write;
     if (seen && seen > 0) {
@@ -524,9 +525,9 @@
       var ago = Math.max(0, Math.round((Date.now() - seen) / 1000));
       var agoText = ago < 60 ? (ago + ' 秒前')
         : (ago < 3600 ? (Math.round(ago / 60) + ' 分钟前') : (Math.round(ago / 3600) + ' 小时前'));
-      el.ledgerSeen.textContent = '最近读到记录：' + hm(d.getHours()) + ':' + hm(d.getMinutes()) + ':' + hm(d.getSeconds()) + '（' + agoText + '）';
+      el.ledgerSeen.textContent = '最近有写入：' + hm(d.getHours()) + ':' + hm(d.getMinutes()) + ':' + hm(d.getSeconds()) + '（' + agoText + '）';
     } else {
-      el.ledgerSeen.textContent = '最近读到记录：还没读到（看看目录是不是选到了数据文件夹）';
+      el.ledgerSeen.textContent = '最近有写入：还没读到（看看目录是不是选到了数据文件夹）';
     }
   }
 
@@ -544,6 +545,12 @@
   var dirs = [];
   var customDirs = undefined; // undefined=还没读到配置；null=自动检测；数组=用户自己定的
   var dirsBusy = false;
+  var holdCheckUntil = 0;
+  /* 临时提示（保存失败之类）先占住自检那一行，别被 5 秒轮询立刻刷掉 */
+  function holdMessage(text) {
+    el.checkLine.textContent = text;
+    holdCheckUntil = Date.now() + 6000;
+  }
 
   function renderDirs() {
     el.dirList.innerHTML = '';
@@ -590,10 +597,10 @@
   }
 
   function saveDirs(next) {
-    if (dirsBusy) return;
+    if (dirsBusy) return Promise.resolve();
     dirsBusy = true;
     renderDirs();
-    Promise.resolve(api.setConfig({ sessionDirs: next })).then(function (c) {
+    return Promise.resolve(api.setConfig({ sessionDirs: next })).then(function (c) {
       customDirs = (c && c.sessionDirs) ? c.sessionDirs : null;
       return api.getState();
     }).then(function (report) {
@@ -602,21 +609,22 @@
     }, function () {
       dirsBusy = false;
       renderDirs();
-      el.checkLine.textContent = '保存账本目录失败，请再试一次';
+      holdMessage('保存账本目录失败，请再试一次');
     });
   }
 
   el.addDir.addEventListener('click', function () {
+    if (dirsBusy) return;
     el.addDir.disabled = true;
     Promise.resolve(api.pickDir()).then(function (path) {
-      if (!path) return;
+      if (!path) return null;
       var next = dirs.slice();
       if (next.indexOf(path) < 0) next.push(path);
-      saveDirs(next);
+      return saveDirs(next);
     }).catch(function () {
-      el.checkLine.textContent = '打开文件夹选择失败';
+      holdMessage('打开文件夹选择失败');
     }).then(function () {
-      el.addDir.disabled = false;
+      if (!dirsBusy) el.addDir.disabled = false;
     });
   });
 

@@ -501,7 +501,7 @@
     el.recompute.disabled = true;
     el.checkResult.textContent = '正在重算…';
     api.recompute().then(function (report) {
-      showCheck(report);
+      applyReport(report);
     }).catch(function () {
       el.checkResult.textContent = '重算失败，请再试一次';
     }).then(function () {
@@ -514,17 +514,41 @@
     el.perToken.textContent = typeof report.tps === 'number' && isFinite(report.tps)
       ? report.tps.toFixed(1) : '—';
   }
-  var tpsTimer = setInterval(function () {
-    api.getState().then(showTps).catch(function () {});
-  }, 5000);
+
+  /* 最近读到记录：扫描是按 mtime 挑今天的会话文件，所以这里是“最近一次有会话写入” */
+  function updateSeen(report) {
+    var seen = report && report.last_write;
+    if (seen && seen > 0) {
+      var d = new Date(seen);
+      var hm = function (n) { return ('0' + n).slice(-2); };
+      var ago = Math.max(0, Math.round((Date.now() - seen) / 1000));
+      var agoText = ago < 60 ? (ago + ' 秒前')
+        : (ago < 3600 ? (Math.round(ago / 60) + ' 分钟前') : (Math.round(ago / 3600) + ' 小时前'));
+      el.ledgerSeen.textContent = '最近读到记录：' + hm(d.getHours()) + ':' + hm(d.getMinutes()) + ':' + hm(d.getSeconds()) + '（' + agoText + '）';
+    } else {
+      el.ledgerSeen.textContent = '最近读到记录：还没读到（看看目录是不是选到了数据文件夹）';
+    }
+  }
+
+  function refreshLive() {
+    api.getState().then(function (report) {
+      showCheck(report);
+      showTps(report);
+      updateSeen(report);
+    }).catch(function () {});
+  }
+  var tpsTimer = setInterval(refreshLive, 5000);
   window.addEventListener('pagehide', function () { clearInterval(tpsTimer); });
 
   /* ---------------- 账本目录 ---------------- */
   var dirs = [];
   var customDirs = undefined; // undefined=还没读到配置；null=自动检测；数组=用户自己定的
+  var dirsBusy = false;
 
   function renderDirs() {
     el.dirList.innerHTML = '';
+    el.addDir.disabled = dirsBusy;
+    el.resetDirs.disabled = dirsBusy;
     if (!dirs.length) {
       var empty = document.createElement('p');
       empty.className = 'checkline';
@@ -550,6 +574,7 @@
       del.type = 'button';
       del.className = 'dir-del';
       del.textContent = '删除';
+      del.disabled = dirsBusy;
       del.addEventListener('click', function () { saveDirs(dirs.filter(function (item) { return item !== path; })); });
       row.appendChild(del);
       el.dirList.appendChild(row);
@@ -559,26 +584,24 @@
   function applyReport(report) {
     showCheck(report);
     showTps(report);
+    updateSeen(report);
     dirs = Array.isArray(report.dirs) ? report.dirs.slice() : [];
     renderDirs();
-    var seen = report.last_write;
-    if (seen && seen > 0) {
-      var d = new Date(seen);
-      var hm = function (n) { return ('0' + n).slice(-2); };
-      var ago = Math.max(0, Math.round((Date.now() - seen) / 1000));
-      var agoText = ago < 60 ? (ago + ' 秒前')
-        : (ago < 3600 ? (Math.round(ago / 60) + ' 分钟前') : (Math.round(ago / 3600) + ' 小时前'));
-      el.ledgerSeen.textContent = '最近读到记录：' + hm(d.getHours()) + ':' + hm(d.getMinutes()) + ':' + hm(d.getSeconds()) + '（' + agoText + '）';
-    } else {
-      el.ledgerSeen.textContent = '最近读到记录：还没读到（看看目录是不是选到了数据文件夹）';
-    }
   }
 
   function saveDirs(next) {
+    if (dirsBusy) return;
+    dirsBusy = true;
+    renderDirs();
     Promise.resolve(api.setConfig({ sessionDirs: next })).then(function (c) {
       customDirs = (c && c.sessionDirs) ? c.sessionDirs : null;
       return api.getState();
-    }).then(applyReport).catch(function () {
+    }).then(function (report) {
+      dirsBusy = false;
+      applyReport(report);
+    }, function () {
+      dirsBusy = false;
+      renderDirs();
       el.checkLine.textContent = '保存账本目录失败，请再试一次';
     });
   }

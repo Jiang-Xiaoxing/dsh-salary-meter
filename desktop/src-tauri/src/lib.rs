@@ -403,22 +403,9 @@ fn dsh_home() -> PathBuf {
     PathBuf::from(".")
 }
 
-/// 自动检测到的账本目录：DSH 自己的，加上还留着的旧 DS Bot 那本。
-fn detected_session_dirs() -> Vec<PathBuf> {
-    let dsh = dsh_home();
-    let mut dirs = vec![dsh.clone()];
-    if let Ok(profile) = std::env::var("USERPROFILE") {
-        let legacy = PathBuf::from(&profile).join(".ds-bot");
-        if legacy.join("sessions").exists() && legacy != dsh {
-            dirs.push(legacy);
-        }
-    }
-    dirs
-}
-
-/// 这次到底读哪几个目录：
-/// - 没配置过（null）：用自动检测的；
-/// - 配置过：只读用户列的，哪怕列表是空的（删光了就是统计不到）。
+/// 这次读哪几个目录：
+/// - 没配置过（null）：只认当前这个 DSH；
+/// - 配置过：按用户列的来，哪怕列表是空的（删光了就是统计不到）。
 fn session_roots(cfg: &Config) -> Vec<PathBuf> {
     match &cfg.session_dirs {
         Some(list) => list
@@ -426,7 +413,7 @@ fn session_roots(cfg: &Config) -> Vec<PathBuf> {
             .filter(|path| !path.trim().is_empty())
             .map(PathBuf::from)
             .collect(),
-        None => detected_session_dirs(),
+        None => vec![dsh_home()],
     }
 }
 

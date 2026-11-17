@@ -184,7 +184,6 @@
   .dir-list{display:flex;flex-direction:column;gap:6px}
   .dir-row{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;background:var(--control);border:1px solid var(--rule);border-radius:8px}
   .dir-path{flex:1;min-width:0;font-size:11px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .dir-tag{font-size:10px;color:var(--ink-3);border:1px solid var(--rule);border-radius:999px;padding:1px 7px;white-space:nowrap}
   .dir-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .dir-btn{font:inherit;font-size:11px;line-height:1;padding:7px 11px;color:var(--ink);background:var(--control);border:1px solid var(--rule);border-radius:7px;cursor:pointer}
   .dir-btn:hover{background:var(--surface);border-color:var(--ink-3)}
@@ -237,8 +236,7 @@
     <div class="dir-list" id="dirList"></div>
     <div class="dir-actions">
       <button class="dir-btn" type="button" id="addDir">＋ 添加目录…</button>
-      <button class="dir-btn" type="button" id="resetDirs">恢复默认</button>
-      <span class="checkline">装了几份 DSH，就把各自的数据目录加进来；同一个会话只算一次</span>
+     <span class="checkline">装了几份 DSH，就把各自的数据目录加进来；同一个会话只算一次</span>
     </div>
   </section>
 
@@ -298,7 +296,6 @@
     ledgerSeen: document.getElementById('ledgerSeen'),
     dirList: document.getElementById('dirList'),
     addDir: document.getElementById('addDir'),
-    resetDirs: document.getElementById('resetDirs'),
     recompute: document.getElementById('recompute')
   };
 
@@ -502,6 +499,7 @@
     el.recompute.disabled = true;
     el.checkResult.textContent = '正在重算…';
     api.recompute().then(function (report) {
+      holdCheckUntil = 0; // 刚算完的是最新结果，别被之前的保护期挡住
       applyReport(report);
     }).catch(function () {
       el.checkResult.textContent = '重算失败，请再试一次';
@@ -543,8 +541,7 @@
 
   /* ---------------- 账本目录 ---------------- */
   var dirs = [];
-  var customDirs = undefined; // undefined=还没读到配置；null=自动检测；数组=用户自己定的
-  var dirsBusy = false;
+ var dirsBusy = false;
   var holdCheckUntil = 0;
   /* 临时提示（保存失败之类）先占住自检那一行，别被 5 秒轮询立刻刷掉 */
   function holdMessage(text) {
@@ -555,11 +552,10 @@
   function renderDirs() {
     el.dirList.innerHTML = '';
     el.addDir.disabled = dirsBusy;
-    el.resetDirs.disabled = dirsBusy;
     if (!dirs.length) {
       var empty = document.createElement('p');
       empty.className = 'checkline';
-      empty.textContent = '列表是空的：现在不会统计任何目录。点「恢复默认」把检测到的加回来。';
+      empty.textContent = '列表是空的：饭钱不会统计。点「添加目录…」选 DSH 的数据目录（一般是用户目录下的 .dsh）。';
       el.dirList.appendChild(empty);
       return;
     }
@@ -571,12 +567,6 @@
       name.textContent = path;
       name.title = path;
       row.appendChild(name);
-      if (customDirs === null) {
-        var tag = document.createElement('span');
-        tag.className = 'dir-tag';
-        tag.textContent = '自动';
-        row.appendChild(tag);
-      }
       var del = document.createElement('button');
       del.type = 'button';
       del.className = 'dir-del';
@@ -600,8 +590,7 @@
     if (dirsBusy) return Promise.resolve();
     dirsBusy = true;
     renderDirs();
-    return Promise.resolve(api.setConfig({ sessionDirs: next })).then(function (c) {
-      customDirs = (c && c.sessionDirs) ? c.sessionDirs : null;
+    return Promise.resolve(api.setConfig({ sessionDirs: next })).then(function () {
       return api.getState();
     }).then(function (report) {
       dirsBusy = false;
@@ -628,7 +617,6 @@
     });
   });
 
-  el.resetDirs.addEventListener('click', function () { saveDirs(null); });
 
   api.getState().then(applyReport).catch(function () {
     el.checkLine.textContent = '自检读取失败';
@@ -636,7 +624,6 @@
 
   api.getConfig().then(function (c) {
     cfg = Object.assign({}, DEF, c || {});
-    customDirs = (c && c.sessionDirs) ? c.sessionDirs : null;
     fill(cfg);
     summarize(cfg);
     renderDirs();

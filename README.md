@@ -26,7 +26,7 @@
 
 **你要的是桌面挂件**，下载页里也只有它：
 
-1. 打开 [桌面版 v0.1.6 下载页](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)，二选一：
+1. 打开 [桌面版 v0.1.7 下载页](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.7)，二选一：
    - `SalaryMeter.exe`：免安装，双击直接用；
    - `SalaryMeter-Setup.exe`：安装版，会进开始菜单。
 2. 双击运行。第一次可以填月薪、工作日、上下班时间；懒得填就用默认值：月薪 5000 元、每月 22 天、09:00–18:00、午休 1 小时、双休。

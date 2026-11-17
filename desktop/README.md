@@ -2,7 +2,7 @@
 
 蓝毛鲸鱼娘、滚轮余额、今日账目和跨天结算。完整功能与素材总览见 [项目首页](../README.md)。
 
-> 当前桌面发布为 [desktop-v0.1.6](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)，安装包内部版本为 **0.2.6**。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
+> 当前桌面发布为 [desktop-v0.1.6](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)，程序内部版本为 **0.2.6**（在 Windows 里看文件属性时显示的就是这个号）。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
 
 ## 下载与操作
 

@@ -2,7 +2,7 @@
 
 蓝毛鲸鱼娘、滚轮余额、今日账目和跨天结算。完整功能与素材总览见 [项目首页](../README.md)。
 
-> 当前桌面发布为 [desktop-v0.1.5](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.5)，安装包内部版本为 **0.2.5**。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
+> 当前桌面发布为 [desktop-v0.1.6](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)，安装包内部版本为 **0.2.6**。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
 
 ## 下载与操作
 
@@ -10,7 +10,7 @@
 - `SalaryMeter-Setup.exe`：安装版。
 - 当前发布目标是 **Windows x64**，依赖 WebView2 Runtime。更新前先退出旧程序。
 
-下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.5)。
+下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)。
 
 人物独立站在桌面上，脚下余额条显示今日工资减去模型费用估算。点击余额条或状态文字展开/收起账目；点人物有互动；拖动可移动并保存位置。点账目右上角 `⋯`、右键人物、鱼粮栏或账目卡，或通过托盘菜单打开设置。
 
@@ -51,7 +51,7 @@
 - **设置自动保存**：月薪、工作日、上下班时间、午休、休息制度、主题、大小和人物开关改完即保存，不需要再点「保存参数」。关闭人物时只停用「大小」和「恢复默认」，其他参数照常可改。
 - **右键设置**：右键人物、鱼粮金额或状态文字、展开的账目卡，都直接打开设置；隐藏人物也能用。鱼粮栏不再弹出金额解释的悬停文字，左键仍用于收起/展开。
 - **自检**：设置里能看到今日已算 / 未算多少笔、合计多少、价格表来源，还有一个「重算今天的账」按钮。
-- **桌面浮层**：可以拖动鱼粮条或账目标题栏移动位置，位置会记住；托盘菜单可切换外观、始终置顶、鼠标穿透和退出。空白区域交给窗口穿透机制放行，不挡下面的程序。
+- **桌面浮层**：可以拖动鱼粮条或账目标题栏移动位置，位置会记住；展开/收起只改窗口高度，顶端不会整体跳动；位置跑出屏幕时，下次启动会把窗口拉回屏幕内并存档。托盘菜单可切换外观、始终置顶、鼠标穿透和退出。空白区域交给窗口穿透机制放行，不挡下面的程序。
 
 ![浅白设置页](docs/settings.png)
 
@@ -135,7 +135,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.5，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
+产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.6，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
 
 ### 源码目录
 

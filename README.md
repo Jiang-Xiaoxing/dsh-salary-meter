@@ -133,6 +133,3 @@ dsh plugin --profile web add github:Jiang-Xiaoxing/dsh-salary-meter#v0.3.3
 - 余额栏用的字体是 Noto Sans CJK SC 的子集，遵循 SIL OFL 1.1，见[字体说明](desktop/renderer/assets/fonts/README.md)和 [OFL](desktop/renderer/assets/fonts/OFL.txt)。
 - 形象是社区二创的 DeepSeek「大肥鱼」。感谢[吃白饭的大肥鱼](https://www.bilibili.com/video/BV1JFtZ6iEpt/)、[蓝色大肥鱼表情包](https://www.bilibili.com/video/BV1V88G6TEvg/)、[家里来了个吃白饭的大肥鱼](https://www.bilibili.com/video/BV1bXHW66Es5/)。素材权利归各自作者。
 
----
-
-本文按 2026-11-17 的仓库和发布记录整理。源码里写了、历史测试过了、你机器上跑起来了，是三件事，别混着算。

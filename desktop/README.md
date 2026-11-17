@@ -2,7 +2,7 @@
 
 蓝毛鲸鱼娘、滚轮余额、今日账目和跨天结算。完整功能与素材总览见 [项目首页](../README.md)。
 
-> 当前桌面发布为 [desktop-v0.1.6](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)，程序内部版本为 **0.2.6**（在 Windows 里看文件属性时显示的就是这个号）。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
+> 当前桌面发布为 [desktop-v0.1.7](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.7)，程序内部版本为 **0.2.7**（在 Windows 里看文件属性时显示的就是这个号）。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
 
 ## 下载与操作
 
@@ -10,7 +10,7 @@
 - `SalaryMeter-Setup.exe`：安装版。
 - 当前发布目标是 **Windows x64**，依赖 WebView2 Runtime。更新前先退出旧程序。
 
-下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.6)。
+下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.7)。
 
 人物独立站在桌面上，脚下余额条显示今日工资减去模型费用估算。点击余额条或状态文字展开/收起账目；点人物有互动；拖动可移动并保存位置。点账目右上角 `⋯`、右键人物、鱼粮栏或账目卡，或通过托盘菜单打开设置。
 
@@ -90,11 +90,11 @@ DSH 插件 v0.3.3 会写 `dsh-busy.json`，在状态变化时更新并每 5 秒�
 
 桌面版只读取本机现有的会话用量，不额外调用模型。
 
-会话根目录依次选择：
+默认只读**当前这个 DSH 的数据目录**：环境变量 `DSH_HOME` 指哪就是哪，没有就是 `%USERPROFILE%\.dsh`。
 
-1. 环境变量 `DSH_HOME`。
-2. 若 `%USERPROFILE%\.ds-bot\data` 存在，使用 `%USERPROFILE%\.ds-bot`。
-3. 否则使用 `%USERPROFILE%\.dsh`。
+设置页的「账本目录」里点「＋ 添加目录…」可以再选别的目录加进来（另外几份 DSH、旧的 DS Bot、或者你自己放在别处的数据），加进来的每一行都能删；全都删光就是不再统计。这是给用户和 Agent 留的入口，装的时候把自己当前的 DSH 加进去就行。
+
+几个目录出现同一个会话（迁移时复制过去的）会按会话编号去重，只算文件更新的那份，**不会把同一笔钱算两遍**。启动日志里会写明这次读了哪几个目录。
 
 日志相对路径为 `sessions/<分组>/session-*/session.v4.jsonl.zstd`。程序解析压缩 JSONL 中的使用记录，按北京时间归日。价格优先合并启动时读到的插件价格缓存，否则使用内置价表；详细估算边界见 [首页](../README.md#模型饭钱怎么算)。
 
@@ -135,7 +135,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.6，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
+产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.7，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
 
 ### 源码目录
 

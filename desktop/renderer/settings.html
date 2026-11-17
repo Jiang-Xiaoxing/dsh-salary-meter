@@ -179,6 +179,17 @@
   #recompute:disabled{opacity:.45;cursor:default}
 
   .diag{color:var(--danger);font-size:10.5px;line-height:1.5;min-height:0}
+
+  /* 账本目录 */
+  .dir-list{display:flex;flex-direction:column;gap:6px}
+  .dir-row{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;background:var(--control);border:1px solid var(--rule);border-radius:8px}
+  .dir-path{flex:1;min-width:0;font-size:11px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dir-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .dir-btn{font:inherit;font-size:11px;line-height:1;padding:7px 11px;color:var(--ink);background:var(--control);border:1px solid var(--rule);border-radius:7px;cursor:pointer}
+  .dir-btn:hover{background:var(--surface);border-color:var(--ink-3)}
+  .dir-btn:disabled{opacity:.45;cursor:default}
+  .dir-del{font:inherit;font-size:10.5px;line-height:1;padding:5px 9px;color:var(--ink-2);background:transparent;border:1px solid var(--rule);border-radius:6px;cursor:pointer}
+  .dir-del:hover{color:var(--danger);border-color:var(--danger)}
   .diag:empty{display:none}
 
   .foot{margin-top:6px;padding-top:8px;border-top:1px solid var(--rule)}
@@ -220,6 +231,15 @@
     </div>
   </section>
 
+  <section class="settings-section">
+    <h2>账本目录</h2>
+    <div class="dir-list" id="dirList"></div>
+    <div class="dir-actions">
+      <button class="dir-btn" type="button" id="addDir">＋ 添加目录…</button>
+     <span class="checkline">装了几份 DSH，就把各自的数据目录加进来；同一个会话只算一次</span>
+    </div>
+  </section>
+
   <div class="stats">
     <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
     <div class="stat hi"><b id="perMonth">¥0.00</b><span>本月累计 · 估算</span></div>
@@ -229,6 +249,7 @@
   <details class="diagnostics">
     <summary>账目自检与价格信息</summary>
     <p class="checkline" id="checkLine">正在读取…</p>
+    <p class="checkline" id="ledgerSeen">最近有写入：—</p>
     <div class="diagRow"><button type="button" id="recompute">重算今天的账</button><span class="checkline" id="checkResult"></span></div>
   </details>
   <div class="diag" id="diag"></div>
@@ -250,9 +271,10 @@
       try { s = JSON.parse(localStorage.getItem('salary-widget-cfg') || '{}'); } catch (e) {}
       return Promise.resolve(Object.assign({}, DEF, s));
     },
-    setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} },
+    setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} return Promise.resolve(); },
     getState: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
-    recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); }
+    recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
+    pickDir: function () { return Promise.resolve(null); }
   };
 
   var el = {
@@ -271,6 +293,9 @@
     perMonth: document.getElementById('perMonth'),
     checkLine: document.getElementById('checkLine'),
     checkResult: document.getElementById('checkResult'),
+    ledgerSeen: document.getElementById('ledgerSeen'),
+    dirList: document.getElementById('dirList'),
+    addDir: document.getElementById('addDir'),
     recompute: document.getElementById('recompute')
   };
 
@@ -459,6 +484,7 @@
 
   /* ---------------- 自检 ---------------- */
   function showCheck(report) {
+    if (Date.now() < holdCheckUntil) return;
     var today = report.today || {};
     var prices = report.prices || {};
     el.checkLine.textContent = '今日已算 ' + (today.known || 0) + ' 笔、未算 ' + (today.unknown || 0)
@@ -473,7 +499,8 @@
     el.recompute.disabled = true;
     el.checkResult.textContent = '正在重算…';
     api.recompute().then(function (report) {
-      showCheck(report);
+      holdCheckUntil = 0; // 刚算完的是最新结果，别被之前的保护期挡住
+      applyReport(report);
     }).catch(function () {
       el.checkResult.textContent = '重算失败，请再试一次';
     }).then(function () {
@@ -486,11 +513,112 @@
     el.perToken.textContent = typeof report.tps === 'number' && isFinite(report.tps)
       ? report.tps.toFixed(1) : '—';
   }
-  var tpsTimer = setInterval(function () {
-    api.getState().then(showTps).catch(function () {});
-  }, 5000);
+
+  /* 最近有写入：扫描按 mtime 挑今天的会话文件，这里显示最近一次会话写入时间 */
+  function updateSeen(report) {
+    var seen = report && report.last_write;
+    if (seen && seen > 0) {
+      var d = new Date(seen);
+      var hm = function (n) { return ('0' + n).slice(-2); };
+      var ago = Math.max(0, Math.round((Date.now() - seen) / 1000));
+      var agoText = ago < 60 ? (ago + ' 秒前')
+        : (ago < 3600 ? (Math.round(ago / 60) + ' 分钟前') : (Math.round(ago / 3600) + ' 小时前'));
+      el.ledgerSeen.textContent = '最近有写入：' + hm(d.getHours()) + ':' + hm(d.getMinutes()) + ':' + hm(d.getSeconds()) + '（' + agoText + '）';
+    } else {
+      el.ledgerSeen.textContent = '最近有写入：还没读到（看看目录是不是选到了数据文件夹）';
+    }
+  }
+
+  function refreshLive() {
+    api.getState().then(function (report) {
+      showCheck(report);
+      showTps(report);
+      updateSeen(report);
+    }).catch(function () {});
+  }
+  var tpsTimer = setInterval(refreshLive, 5000);
   window.addEventListener('pagehide', function () { clearInterval(tpsTimer); });
-  api.getState().then(function (report) { showCheck(report); showTps(report); }).catch(function () {
+
+  /* ---------------- 账本目录 ---------------- */
+  var dirs = [];
+ var dirsBusy = false;
+  var holdCheckUntil = 0;
+  /* 临时提示（保存失败之类）先占住自检那一行，别被 5 秒轮询立刻刷掉 */
+  function holdMessage(text) {
+    el.checkLine.textContent = text;
+    holdCheckUntil = Date.now() + 6000;
+  }
+
+  function renderDirs() {
+    el.dirList.innerHTML = '';
+    el.addDir.disabled = dirsBusy;
+    if (!dirs.length) {
+      var empty = document.createElement('p');
+      empty.className = 'checkline';
+      empty.textContent = '列表是空的：饭钱不会统计。点「添加目录…」选 DSH 的数据目录（一般是用户目录下的 .dsh）。';
+      el.dirList.appendChild(empty);
+      return;
+    }
+    dirs.forEach(function (path) {
+      var row = document.createElement('div');
+      row.className = 'dir-row';
+      var name = document.createElement('span');
+      name.className = 'dir-path';
+      name.textContent = path;
+      name.title = path;
+      row.appendChild(name);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'dir-del';
+      del.textContent = '删除';
+      del.disabled = dirsBusy;
+      del.addEventListener('click', function () { saveDirs(dirs.filter(function (item) { return item !== path; })); });
+      row.appendChild(del);
+      el.dirList.appendChild(row);
+    });
+  }
+
+  function applyReport(report) {
+    showCheck(report);
+    showTps(report);
+    updateSeen(report);
+    dirs = Array.isArray(report.dirs) ? report.dirs.slice() : [];
+    renderDirs();
+  }
+
+  function saveDirs(next) {
+    if (dirsBusy) return Promise.resolve();
+    dirsBusy = true;
+    renderDirs();
+    return Promise.resolve(api.setConfig({ sessionDirs: next })).then(function () {
+      return api.getState();
+    }).then(function (report) {
+      dirsBusy = false;
+      applyReport(report);
+    }, function () {
+      dirsBusy = false;
+      renderDirs();
+      holdMessage('保存账本目录失败，请再试一次');
+    });
+  }
+
+  el.addDir.addEventListener('click', function () {
+    if (dirsBusy) return;
+    el.addDir.disabled = true;
+    Promise.resolve(api.pickDir()).then(function (path) {
+      if (!path) return null;
+      var next = dirs.slice();
+      if (next.indexOf(path) < 0) next.push(path);
+      return saveDirs(next);
+    }).catch(function () {
+      holdMessage('打开文件夹选择失败');
+    }).then(function () {
+      if (!dirsBusy) el.addDir.disabled = false;
+    });
+  });
+
+
+  api.getState().then(applyReport).catch(function () {
     el.checkLine.textContent = '自检读取失败';
   });
 
@@ -498,6 +626,7 @@
     cfg = Object.assign({}, DEF, c || {});
     fill(cfg);
     summarize(cfg);
+    renderDirs();
   });
 })();
 </script>

@@ -38,7 +38,7 @@ fn income(cfg: &Config, stamp: i64) -> f64 {
 fn scan_bill(app: &AppHandle, cfg: &Config, now: i64) -> Bill {
     let yesterday=ledger::day_start_ms(now)-1;
     let target=ledger::beijing_day(yesterday);
-    let report=ledger::scan_at_roots(&app.state::<AppState>().prices,&mut ledger::ScanCache::default(),&session_roots(),yesterday);
+    let report=ledger::scan_at_roots(&app.state::<AppState>().prices,&mut ledger::ScanCache::default(),&session_roots(cfg),yesterday);
     Bill{day:target,income:income(cfg,yesterday),expense:report.today.expense,unknown:report.today.unknown}
 }
 /// 读账本。文件坏了先留一份证据、重建空账本，别让结算功能永久失效。

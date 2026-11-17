@@ -26,6 +26,9 @@
     getState: function () {
       return invoke('get_state');
     },
+    pickDir: function () {
+      return invoke('pick_ledger_dir');
+    },
     recompute: function () {
       return invoke('recompute_today');
     },

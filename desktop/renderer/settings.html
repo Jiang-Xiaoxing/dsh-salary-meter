@@ -179,6 +179,18 @@
   #recompute:disabled{opacity:.45;cursor:default}
 
   .diag{color:var(--danger);font-size:10.5px;line-height:1.5;min-height:0}
+
+  /* 账本目录 */
+  .dir-list{display:flex;flex-direction:column;gap:6px}
+  .dir-row{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;background:var(--control);border:1px solid var(--rule);border-radius:8px}
+  .dir-path{flex:1;min-width:0;font-size:11px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dir-tag{font-size:10px;color:var(--ink-3);border:1px solid var(--rule);border-radius:999px;padding:1px 7px;white-space:nowrap}
+  .dir-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .dir-btn{font:inherit;font-size:11px;line-height:1;padding:7px 11px;color:var(--ink);background:var(--control);border:1px solid var(--rule);border-radius:7px;cursor:pointer}
+  .dir-btn:hover{background:var(--surface);border-color:var(--ink-3)}
+  .dir-btn:disabled{opacity:.45;cursor:default}
+  .dir-del{font:inherit;font-size:10.5px;line-height:1;padding:5px 9px;color:var(--ink-2);background:transparent;border:1px solid var(--rule);border-radius:6px;cursor:pointer}
+  .dir-del:hover{color:var(--danger);border-color:var(--danger)}
   .diag:empty{display:none}
 
   .foot{margin-top:6px;padding-top:8px;border-top:1px solid var(--rule)}
@@ -220,6 +232,16 @@
     </div>
   </section>
 
+  <section class="settings-section">
+    <h2>账本目录</h2>
+    <div class="dir-list" id="dirList"></div>
+    <div class="dir-actions">
+      <button class="dir-btn" type="button" id="addDir">＋ 添加目录…</button>
+      <button class="dir-btn" type="button" id="resetDirs">恢复默认</button>
+      <span class="checkline">装了几份 DSH，就把各自的数据目录加进来；同一个会话只算一次</span>
+    </div>
+  </section>
+
   <div class="stats">
     <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
     <div class="stat hi"><b id="perMonth">¥0.00</b><span>本月累计 · 估算</span></div>
@@ -229,6 +251,7 @@
   <details class="diagnostics">
     <summary>账目自检与价格信息</summary>
     <p class="checkline" id="checkLine">正在读取…</p>
+    <p class="checkline" id="ledgerSeen">最近读到记录：—</p>
     <div class="diagRow"><button type="button" id="recompute">重算今天的账</button><span class="checkline" id="checkResult"></span></div>
   </details>
   <div class="diag" id="diag"></div>
@@ -250,9 +273,10 @@
       try { s = JSON.parse(localStorage.getItem('salary-widget-cfg') || '{}'); } catch (e) {}
       return Promise.resolve(Object.assign({}, DEF, s));
     },
-    setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} },
+    setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} return Promise.resolve(); },
     getState: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
-    recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); }
+    recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
+    pickDir: function () { return Promise.resolve(null); }
   };
 
   var el = {
@@ -271,6 +295,10 @@
     perMonth: document.getElementById('perMonth'),
     checkLine: document.getElementById('checkLine'),
     checkResult: document.getElementById('checkResult'),
+    ledgerSeen: document.getElementById('ledgerSeen'),
+    dirList: document.getElementById('dirList'),
+    addDir: document.getElementById('addDir'),
+    resetDirs: document.getElementById('resetDirs'),
     recompute: document.getElementById('recompute')
   };
 
@@ -490,14 +518,97 @@
     api.getState().then(showTps).catch(function () {});
   }, 5000);
   window.addEventListener('pagehide', function () { clearInterval(tpsTimer); });
-  api.getState().then(function (report) { showCheck(report); showTps(report); }).catch(function () {
+
+  /* ---------------- 账本目录 ---------------- */
+  var dirs = [];
+  var customDirs = undefined; // undefined=还没读到配置；null=自动检测；数组=用户自己定的
+
+  function renderDirs() {
+    el.dirList.innerHTML = '';
+    if (!dirs.length) {
+      var empty = document.createElement('p');
+      empty.className = 'checkline';
+      empty.textContent = '列表是空的：现在不会统计任何目录。点「恢复默认」把检测到的加回来。';
+      el.dirList.appendChild(empty);
+      return;
+    }
+    dirs.forEach(function (path) {
+      var row = document.createElement('div');
+      row.className = 'dir-row';
+      var name = document.createElement('span');
+      name.className = 'dir-path';
+      name.textContent = path;
+      name.title = path;
+      row.appendChild(name);
+      if (customDirs === null) {
+        var tag = document.createElement('span');
+        tag.className = 'dir-tag';
+        tag.textContent = '自动';
+        row.appendChild(tag);
+      }
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'dir-del';
+      del.textContent = '删除';
+      del.addEventListener('click', function () { saveDirs(dirs.filter(function (item) { return item !== path; })); });
+      row.appendChild(del);
+      el.dirList.appendChild(row);
+    });
+  }
+
+  function applyReport(report) {
+    showCheck(report);
+    showTps(report);
+    dirs = Array.isArray(report.dirs) ? report.dirs.slice() : [];
+    renderDirs();
+    var seen = report.last_write;
+    if (seen && seen > 0) {
+      var d = new Date(seen);
+      var hm = function (n) { return ('0' + n).slice(-2); };
+      var ago = Math.max(0, Math.round((Date.now() - seen) / 1000));
+      var agoText = ago < 60 ? (ago + ' 秒前')
+        : (ago < 3600 ? (Math.round(ago / 60) + ' 分钟前') : (Math.round(ago / 3600) + ' 小时前'));
+      el.ledgerSeen.textContent = '最近读到记录：' + hm(d.getHours()) + ':' + hm(d.getMinutes()) + ':' + hm(d.getSeconds()) + '（' + agoText + '）';
+    } else {
+      el.ledgerSeen.textContent = '最近读到记录：还没读到（看看目录是不是选到了数据文件夹）';
+    }
+  }
+
+  function saveDirs(next) {
+    Promise.resolve(api.setConfig({ sessionDirs: next })).then(function (c) {
+      customDirs = (c && c.sessionDirs) ? c.sessionDirs : null;
+      return api.getState();
+    }).then(applyReport).catch(function () {
+      el.checkLine.textContent = '保存账本目录失败，请再试一次';
+    });
+  }
+
+  el.addDir.addEventListener('click', function () {
+    el.addDir.disabled = true;
+    Promise.resolve(api.pickDir()).then(function (path) {
+      if (!path) return;
+      var next = dirs.slice();
+      if (next.indexOf(path) < 0) next.push(path);
+      saveDirs(next);
+    }).catch(function () {
+      el.checkLine.textContent = '打开文件夹选择失败';
+    }).then(function () {
+      el.addDir.disabled = false;
+    });
+  });
+
+  el.resetDirs.addEventListener('click', function () { saveDirs(null); });
+
+  api.getState().then(applyReport).catch(function () {
     el.checkLine.textContent = '自检读取失败';
   });
 
   api.getConfig().then(function (c) {
     cfg = Object.assign({}, DEF, c || {});
+    customDirs = (c && c.sessionDirs) ? c.sessionDirs : null;
     fill(cfg);
     summarize(cfg);
+    renderDirs();
   });
 })();
 </script>

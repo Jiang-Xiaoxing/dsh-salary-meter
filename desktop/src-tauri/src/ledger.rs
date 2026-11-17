@@ -464,6 +464,8 @@ pub struct ScanReport {
     /// 今天写过的会话日志里，最近一次的修改时间（毫秒）；没有会话就是 0。
     /// 挂件用它判断还有没有人在用 DSH／DS Bot（两分钟内写过就算在跑）。
     pub last_write_ms: i64,
+    /// 这一轮实际读了哪几个目录（给设置页显示，出问题一眼能看出来）。
+    pub dirs: Vec<String>,
 }
 
 /// 扫今天所有会话日志，返回今日花费。未变化的文件直接复用上次结果。
@@ -474,6 +476,7 @@ pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanRe
 pub fn scan_today_roots(prices: &Prices, cache: &mut ScanCache, roots: &[PathBuf]) -> ScanReport {
     scan_at_roots(prices, cache, roots, now_ms())
 }
+#[allow(dead_code)] // 单元测试还在用单目录版本
 pub fn scan_at(prices: &Prices, cache: &mut ScanCache, home: &Path, now: i64) -> ScanReport {
     scan_at_roots(prices, cache, &[home.to_path_buf()], now)
 }
@@ -521,6 +524,7 @@ pub fn scan_at_roots(prices: &Prices, cache: &mut ScanCache, roots: &[PathBuf], 
         prices: prices.source.clone(),
         models: prices.count(),
         last_write_ms,
+        dirs: roots.iter().map(|root| root.display().to_string()).collect(),
     }
 }
 

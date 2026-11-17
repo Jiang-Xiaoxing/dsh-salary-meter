@@ -172,6 +172,10 @@ struct Config {
     #[serde(rename = "petScale")]
     pet_scale: f64,
     expanded: bool,
+    /// 账本目录（会话日志根目录）。null/缺失＝没配置过，用自动检测的两处；
+    /// 非 null 就按这个列表读，空数组表示一个都不读。
+    #[serde(rename = "sessionDirs", default)]
+    session_dirs: Option<Vec<String>>,
 }
 
 impl Default for Config {
@@ -190,6 +194,7 @@ impl Default for Config {
             animation: true,
             pet_scale: 130.0,
             expanded: false,
+            session_dirs: None,
         }
     }
 }
@@ -398,28 +403,42 @@ fn dsh_home() -> PathBuf {
     PathBuf::from(".")
 }
 
-/// 今天该读哪几本账：DSH 自己的那本，加上还留着的旧 DS Bot 那本。
-/// 两边有同一个会话时（迁移时复制过），扫描时会按会话编号去重，不会算两遍。
-fn session_roots() -> Vec<PathBuf> {
+/// 自动检测到的账本目录：DSH 自己的，加上还留着的旧 DS Bot 那本。
+fn detected_session_dirs() -> Vec<PathBuf> {
     let dsh = dsh_home();
-    let mut roots = vec![dsh.clone()];
+    let mut dirs = vec![dsh.clone()];
     if let Ok(profile) = std::env::var("USERPROFILE") {
         let legacy = PathBuf::from(&profile).join(".ds-bot");
         if legacy.join("sessions").exists() && legacy != dsh {
-            roots.push(legacy);
+            dirs.push(legacy);
         }
     }
-    roots
+    dirs
+}
+
+/// 这次到底读哪几个目录：
+/// - 没配置过（null）：用自动检测的；
+/// - 配置过：只读用户列的，哪怕列表是空的（删光了就是统计不到）。
+fn session_roots(cfg: &Config) -> Vec<PathBuf> {
+    match &cfg.session_dirs {
+        Some(list) => list
+            .iter()
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from)
+            .collect(),
+        None => detected_session_dirs(),
+    }
 }
 
 fn run_scan(app: &AppHandle, refresh: bool) -> ledger::ScanReport {
+    let cfg = load_config(app);
     let state = app.state::<AppState>();
     let AppState { cache, prices, .. } = &*state;
     let mut cache = cache.lock().unwrap_or_else(|error| error.into_inner());
     if refresh {
         cache.clear();
     }
-    ledger::scan_today_roots(prices, &mut cache, &session_roots())
+    ledger::scan_today_roots(prices, &mut cache, &session_roots(&cfg))
 }
 
 #[derive(Serialize)]
@@ -440,6 +459,8 @@ struct StatePayload {
     last_write: i64,
     /* 插件写的心跳：DS Bot 里有没有任务在跑（真实状态，优先于上面的估算） */
     dsh_busy: Option<BusyReport>,
+    /* 这一轮实际扫了哪几个目录 */
+    dirs: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -478,6 +499,7 @@ fn get_state(app: AppHandle) -> StatePayload {
         updated: ledger::now_ms(),
         last_write: report.last_write_ms,
         dsh_busy: read_busy_report(&app),
+        dirs: report.dirs,
     }
 }
 
@@ -497,6 +519,7 @@ fn recompute_today(app: AppHandle) -> StatePayload {
         updated: ledger::now_ms(),
         last_write: report.last_write_ms,
         dsh_busy: read_busy_report(&app),
+        dirs: report.dirs,
     }
 }
 
@@ -556,6 +579,21 @@ fn set_config(app: AppHandle, patch: serde_json::Value) -> Config {
 
     if let Some(v) = patch.get("petScale").and_then(|v| v.as_f64()) {
         cfg.pet_scale = v.clamp(80.0, 160.0);
+    }
+    // null = 回到自动检测；数组 = 只用这些目录（空数组表示一个都不读）
+    if let Some(v) = patch.get("sessionDirs") {
+        cfg.session_dirs = if v.is_null() {
+            None
+        } else {
+            v.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str())
+                    .map(|item| item.trim().to_string())
+                    .filter(|item| !item.is_empty())
+                    .collect()
+            })
+        };
     }
     save_config(&app, &cfg);
     let _ = app.emit("config-changed", &cfg);
@@ -851,9 +889,23 @@ fn start_click_through(app: AppHandle) {
 
 /* ----------------------------------------------------------------- 启动 */
 
+/// 设置页「添加目录」：弹系统选文件夹窗口，返回选中路径（取消返回空）。
+#[tauri::command(async)]
+async fn pick_ledger_dir(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog().file().blocking_pick_folder()
+    })
+    .await
+    .ok()
+    .flatten()?;
+    picked.into_path().ok().map(|path| path.display().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             hit_regions: Mutex::new(Vec::new()),
             passthrough: AtomicBool::new(false),
@@ -877,7 +929,8 @@ pub fn run() {
             start_pet_drag,
             set_hit_regions,
             user_idle_ms,
-            log_event
+            log_event,
+            pick_ledger_dir
         ])
         .setup(|app| {
             let cfg = load_config(app.handle());
@@ -978,7 +1031,7 @@ pub fn run() {
                     app.handle(),
                     &format!("启动; 数据目录={}; {saved_text}", data_dir(app.handle()).display()),
                 );
-                let roots = session_roots();
+                let roots = session_roots(&load_config(app.handle()));
                 let roots_text = roots
                     .iter()
                     .map(|path| path.display().to_string())
@@ -1070,6 +1123,25 @@ pub fn run() {
 #[cfg(test)]
 mod ui_geometry_tests {
     use super::*;
+
+    #[test]
+    fn ledger_dirs_follow_config() {
+        let mut cfg = Config::default();
+        // 没配置过：自动检测
+        assert!(!session_roots(&cfg).is_empty());
+
+        // 配了列表：只按列表读
+        cfg.session_dirs = Some(vec!["C:\\a".to_string(), "C:\\b".to_string()]);
+        assert_eq!(session_roots(&cfg).len(), 2);
+
+        // 明确删光：一个都不读
+        cfg.session_dirs = Some(Vec::new());
+        assert!(session_roots(&cfg).is_empty());
+
+        // 列表里有空行：忽略
+        cfg.session_dirs = Some(vec!["  ".to_string(), "C:\\a".to_string()]);
+        assert_eq!(session_roots(&cfg).len(), 1);
+    }
 
     #[test]
     fn settings_height_never_exceeds_work_area() {

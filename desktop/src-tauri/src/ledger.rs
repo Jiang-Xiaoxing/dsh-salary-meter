@@ -434,6 +434,27 @@ impl ScanCache {
     }
 }
 
+/// 同一个会话可能同时出现在多个数据目录里（从旧 DS Bot 迁移时复制过一份）。
+/// 按会话编号去重，只留文件更新的那份，避免同一笔钱算两遍。
+fn dedupe_sessions(files: Vec<(PathBuf, u64, u64)>) -> Vec<(PathBuf, u64, u64)> {
+    let mut best: HashMap<String, (PathBuf, u64, u64)> = HashMap::new();
+    for (path, modified, len) in files {
+        let id = path
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let keep = match best.get(&id) {
+            Some((_, seen_modified, seen_len)) => modified > *seen_modified || (modified == *seen_modified && len > *seen_len),
+            None => true,
+        };
+        if keep {
+            best.insert(id, (path, modified, len));
+        }
+    }
+    best.into_values().collect()
+}
+
 #[derive(serde::Serialize)]
 pub struct ScanReport {
     pub today: Totals,
@@ -441,21 +462,33 @@ pub struct ScanReport {
     pub prices: String,
     pub models: usize,
     /// 今天写过的会话日志里，最近一次的修改时间（毫秒）；没有会话就是 0。
-    /// 挂件用它判断 DS Bot 是不是还在跑（两分钟内写过就算在跑）。
+    /// 挂件用它判断还有没有人在用 DSH／DS Bot（两分钟内写过就算在跑）。
     pub last_write_ms: i64,
 }
 
 /// 扫今天所有会话日志，返回今日花费。未变化的文件直接复用上次结果。
+#[allow(dead_code)] // 单元测试还在用单目录版本
 pub fn scan_today(prices: &Prices, cache: &mut ScanCache, home: &Path) -> ScanReport {
-    scan_at(prices, cache, home, now_ms())
+    scan_today_roots(prices, cache, &[home.to_path_buf()])
+}
+pub fn scan_today_roots(prices: &Prices, cache: &mut ScanCache, roots: &[PathBuf]) -> ScanReport {
+    scan_at_roots(prices, cache, roots, now_ms())
 }
 pub fn scan_at(prices: &Prices, cache: &mut ScanCache, home: &Path, now: i64) -> ScanReport {
+    scan_at_roots(prices, cache, &[home.to_path_buf()], now)
+}
+pub fn scan_at_roots(prices: &Prices, cache: &mut ScanCache, roots: &[PathBuf], now: i64) -> ScanReport {
     let day = beijing_day(now);
     if cache.day != day {
         cache.clear();
         cache.day = day.clone();
     }
-    let files = session_files(home, day_start_ms(now).min(now - 3_600_000));
+    let since = day_start_ms(now).min(now - 3_600_000);
+    let mut files = Vec::new();
+    for root in roots {
+        files.extend(session_files(root, since));
+    }
+    let files = dedupe_sessions(files);
     let mut totals = Totals::default();
     let mut seen = Vec::with_capacity(files.len());
     let mut last_write_ms = 0i64;
@@ -551,5 +584,113 @@ mod tps_tests {
         let report = scan_today(&load_prices(None), &mut ScanCache::default(), &home);
         println!("TPS_HOUR out={} dur={} tps={:?}",
             report.today.hour_out, report.today.hour_dur_ms, report.today.tps());
+    }
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::dedupe_sessions;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn file(root: &str, session: &str, modified: u64, len: u64) -> (PathBuf, u64, u64) {
+        (
+            PathBuf::from(root)
+                .join("sessions")
+                .join("group")
+                .join(session)
+                .join("session.v4.jsonl.zstd"),
+            modified,
+            len,
+        )
+    }
+
+    #[test]
+    fn copied_session_keeps_only_the_newer_copy() {
+        let old = file("old-bot", "session-1", 100, 500);
+        let new = file("dsh", "session-1", 200, 900);
+        let kept = dedupe_sessions(vec![old, new.clone()]);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].0, new.0);
+        assert_eq!(kept[0].1, 200);
+    }
+
+    #[test]
+    fn different_sessions_are_all_kept() {
+        let kept = dedupe_sessions(vec![
+            file("dsh", "session-a", 100, 500),
+            file("dsh", "session-b", 100, 600),
+            file("old-bot", "session-c", 100, 700),
+        ]);
+        assert_eq!(kept.len(), 3);
+    }
+
+    #[test]
+    fn same_time_keeps_the_longer_copy() {
+        let short = file("old-bot", "session-1", 100, 500);
+        let long = file("dsh", "session-1", 100, 800);
+        let kept = dedupe_sessions(vec![short, long.clone()]);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].2, 800);
+    }
+
+    fn session_bytes(now: i64, outputs: &[u64]) -> Vec<u8> {
+        let mut lines: Vec<String> = vec![serde_json::json!({
+            "type": "request/header",
+            "data": {"header": {"config": {"model": "deepseek-flash"}}}
+        })
+        .to_string()];
+        for (index, output) in outputs.iter().enumerate() {
+            lines.push(
+                serde_json::json!({
+                    "type": "assistant/message",
+                    "time": now - 5000 + index as i64,
+                    "data": {"stream": [
+                        {"time0": 100, "time": "ignore"},
+                        {"type": "chunk", "time": 1100, "chunk": {"type": "usage", "usage": {"outputTokens": output}}}
+                    ]}
+                })
+                .to_string(),
+            );
+        }
+        zstd::stream::encode_all(lines.join("\n").as_bytes(), 0).unwrap()
+    }
+
+    #[test]
+    fn shared_session_in_two_roots_is_counted_once() {
+        let now = super::now_ms();
+        let root_a = std::env::temp_dir().join(format!("salary-merge-a-{}", std::process::id()));
+        let root_b = std::env::temp_dir().join(format!("salary-merge-b-{}", std::process::id()));
+        let shared_a = root_a.join("sessions").join("group").join("session-shared");
+        let shared_b = root_b.join("sessions").join("group").join("session-shared");
+        let only_b = root_b.join("sessions").join("group").join("session-only-b");
+        for dir in [&shared_a, &shared_b, &only_b] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        let shared = session_bytes(now, &[1000, 2000]);
+        fs::write(shared_a.join("session.v4.jsonl.zstd"), &shared).unwrap();
+        fs::write(shared_b.join("session.v4.jsonl.zstd"), &shared).unwrap();
+        fs::write(only_b.join("session.v4.jsonl.zstd"), session_bytes(now, &[500])).unwrap();
+
+        let prices = super::load_prices(None);
+        let a = super::scan_at_roots(&prices, &mut super::ScanCache::default(), &[root_a.clone()], now);
+        let b = super::scan_at_roots(&prices, &mut super::ScanCache::default(), &[root_b.clone()], now);
+        let both = super::scan_at_roots(
+            &prices,
+            &mut super::ScanCache::default(),
+            &[root_a.clone(), root_b.clone()],
+            now,
+        );
+
+        // A 里的会话在 B 里有一份一模一样的，合起来应该等于只扫 B（2 个会话），而不是 3 个。
+        assert_eq!(both.sessions, 2);
+        assert_eq!(both.today.known, b.today.known);
+        assert!((both.today.expense - b.today.expense).abs() < 1e-9);
+        // 而且共享那份确实算进了钱（不是被丢掉）。
+        assert!(a.today.expense > 0.0);
+        assert!(b.today.expense > a.today.expense);
+
+        fs::remove_dir_all(&root_a).ok();
+        fs::remove_dir_all(&root_b).ok();
     }
 }

@@ -393,13 +393,23 @@ fn dsh_home() -> PathBuf {
         }
     }
     if let Ok(profile) = std::env::var("USERPROFILE") {
-        let ds_bot = PathBuf::from(&profile).join(".ds-bot");
-        if ds_bot.join("data").exists() {
-            return ds_bot;
-        }
         return PathBuf::from(&profile).join(".dsh");
     }
     PathBuf::from(".")
+}
+
+/// 今天该读哪几本账：DSH 自己的那本，加上还留着的旧 DS Bot 那本。
+/// 两边有同一个会话时（迁移时复制过），扫描时会按会话编号去重，不会算两遍。
+fn session_roots() -> Vec<PathBuf> {
+    let dsh = dsh_home();
+    let mut roots = vec![dsh.clone()];
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        let legacy = PathBuf::from(&profile).join(".ds-bot");
+        if legacy.join("sessions").exists() && legacy != dsh {
+            roots.push(legacy);
+        }
+    }
+    roots
 }
 
 fn run_scan(app: &AppHandle, refresh: bool) -> ledger::ScanReport {
@@ -409,7 +419,7 @@ fn run_scan(app: &AppHandle, refresh: bool) -> ledger::ScanReport {
     if refresh {
         cache.clear();
     }
-    ledger::scan_today(prices, &mut cache, &dsh_home())
+    ledger::scan_today_roots(prices, &mut cache, &session_roots())
 }
 
 #[derive(Serialize)]
@@ -968,6 +978,13 @@ pub fn run() {
                     app.handle(),
                     &format!("启动; 数据目录={}; {saved_text}", data_dir(app.handle()).display()),
                 );
+                let roots = session_roots();
+                let roots_text = roots
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                startup_log(app.handle(), &format!("账本目录: {roots_text}"));
                 match saved {
                     Some(p) => {
                         let _ = win.set_position(PhysicalPosition::new(p.x, p.y));

@@ -90,11 +90,12 @@ DSH 插件 v0.3.3 会写 `dsh-busy.json`，在状态变化时更新并每 5 秒�
 
 桌面版只读取本机现有的会话用量，不额外调用模型。
 
-会话根目录依次选择：
+会话目录会同时读两处：
 
-1. 环境变量 `DSH_HOME`。
-2. 若 `%USERPROFILE%\.ds-bot\data` 存在，使用 `%USERPROFILE%\.ds-bot`。
-3. 否则使用 `%USERPROFILE%\.dsh`。
+1. DSH 自己的目录：环境变量 `DSH_HOME`，没有就是 `%USERPROFILE%\.dsh`。
+2. 旧 DS Bot 还留着的话，再读 `%USERPROFILE%\.ds-bot`。
+
+两边出现同一个会话（迁移时复制过去的）会按会话编号去重，只算文件更新的那份，**不会把同一笔钱算两遍**。启动日志里会写明这次读了哪几个目录。
 
 日志相对路径为 `sessions/<分组>/session-*/session.v4.jsonl.zstd`。程序解析压缩 JSONL 中的使用记录，按北京时间归日。价格优先合并启动时读到的插件价格缓存，否则使用内置价表；详细估算边界见 [首页](../README.md#模型饭钱怎么算)。
 

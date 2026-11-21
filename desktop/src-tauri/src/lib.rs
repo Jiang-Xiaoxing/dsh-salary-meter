@@ -220,6 +220,13 @@ struct AppState {
     dragging_until: AtomicU64,
     cache: Mutex<ledger::ScanCache>,
     prices: ledger::Prices,
+    /// 本月 token 单独一套缓存，跟今日账目互不影响。
+    month_cache: Mutex<ledger::MonthCache>,
+    /// 上一次算完的本月结果：这套扫描要读上百兆日志，撞车时先给旧数，别让用户等着。
+    /// 记着它的月份和账本目录，跨月或换目录之后就不再拿来用。
+    month_last: Mutex<Option<(String, Vec<PathBuf>, ledger::MonthReport)>>,
+    /// 有扫描正在跑：同一时刻只允许一个，免得每 60 秒的轮询叠罗汉。
+    month_scanning: AtomicBool,
 }
 
 struct TrayHandles {
@@ -507,6 +514,79 @@ fn recompute_today(app: AppHandle) -> StatePayload {
         last_write: report.last_write_ms,
         dsh_busy: read_busy_report(&app),
         dirs: report.dirs,
+    }
+}
+
+/* ---------------------------------------------------------------- 本月 token */
+
+#[derive(Serialize)]
+struct MonthPayload {
+    /// 可用的上一次结果。撞车、跨月、换目录时这里是 None，
+    /// 前端见到 None 就保持「—」，绝不拿 0 或上个月的数冒充本月。
+    report: Option<ledger::MonthReport>,
+    /// 这次返回的是不是上一轮的结果（有新扫描在跑，先给旧数）。
+    stale: bool,
+    updated: i64,
+}
+
+/// 扫本月所有会话日志的 token 用量。
+///
+/// 这条链要解开两百多兆日志，不能挂在 `get_state` 上（挂件每 3 秒拉一次）。
+/// 设置页只在打开时拉一次，之后 60 秒一次；同一时刻只允许一个扫描在跑，
+/// 后来的请求直接拿上一次的结果，不排队、不叠加。
+#[tauri::command(async)]
+fn get_month_tokens(app: AppHandle) -> MonthPayload {
+    let cfg = load_config(&app);
+    let state = app.state::<AppState>();
+    let roots = session_roots(&cfg);
+    let now = ledger::now_ms();
+    let month = ledger::beijing_month(now);
+    let cached = state
+        .month_last
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone();
+
+    // 已经有一个在扫：先给旧数，别让用户干等第二次。
+    // 但旧数必须是「同一个月的、同一批账本目录的」才能给——跨月或换目录之后
+    // 那个数是上个月／别的目录的，拿来冒充本月会把用户骗了，这时宁可返回 None。
+    if state
+        .month_scanning
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        // 旧数还必须是「同一个月的、同一批目录的、而且『今天』那格也是今天的」。
+        // 只看月份和目录不够：跨过零点后的第一次扫描还没跑完时，同月同目录的
+        // 昨晚报告也能通过，前端就会把昨天的用量填进「今天」那一格。
+        let today_start = ledger::day_start_ms(now);
+        let reusable = cached.filter(|(saved_month, saved_roots, report)| {
+            *saved_month == month && *saved_roots == roots && report.today_start_ms == today_start
+        });
+        return MonthPayload {
+            report: reusable.map(|(_, _, report)| report),
+            stale: true,
+            updated: now,
+        };
+    }
+
+    let result = {
+        let mut cache = state
+            .month_cache
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        ledger::scan_month_roots(&mut cache, &roots, now)
+    };
+    state.month_scanning.store(false, Ordering::Release);
+    *state
+        .month_last
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) =
+        Some((month, roots, result.clone()));
+
+    MonthPayload {
+        report: Some(result),
+        stale: false,
+        updated: ledger::now_ms(),
     }
 }
 
@@ -902,12 +982,16 @@ pub fn run() {
             prices: ledger::load_prices(
                 Some(plugin_data_dir().join("prices-cache.json").as_path()),
             ),
+            month_cache: Mutex::new(ledger::MonthCache::default()),
+            month_last: Mutex::new(None),
+            month_scanning: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             settlement::poll_settlement, settlement::settlement_bill, settlement::dismiss_settlement, settlement::hide_settlement,
             get_config,
             set_config,get_state,
             recompute_today,
+            get_month_tokens,
             set_expanded,
             set_mode,
             open_settings,

@@ -13,8 +13,8 @@ await frame(`d.querySelector('[data-theme="${theme}"]').click()`);await sleep(50
 assert.equal(await run("document.querySelector('#settingsLayer').dataset.settingsTheme"),theme);
 assert.equal(await frame('return d.body.dataset.settingsTheme'),theme);
 assert.equal(await run('(async()=> (await api.getConfig()).theme)()'),theme);
-const layout=await frame("return Array.from(d.querySelectorAll('.stat')).map(n=>({y:n.getBoundingClientRect().y,w:n.clientWidth,scroll:n.scrollWidth,label:n.querySelector('span').textContent}))");
-assert.equal(new Set(layout.map(r=>r.y)).size,1);assert(layout.every(r=>r.scroll<=r.w));
+const layout=await frame("return Array.from(d.querySelectorAll('.stat')).map(n=>({y:Math.round(n.getBoundingClientRect().y),x:Math.round(n.getBoundingClientRect().x),w:n.clientWidth,scroll:n.scrollWidth,label:n.querySelector('span').textContent}))");
+assert.equal(new Set(layout.map(r=>r.y)).size,2);assert.equal(new Set(layout.map(r=>r.x)).size,2);assert(layout.every(r=>r.scroll<=r.w));
 const fonts=await frame("return ['#salary','#perDay','#perMonth','#perToken','.field label','.seg button'].map(s=>d.defaultView.getComputedStyle(d.querySelector(s)).fontFamily)");assert(fonts.every(f=>f.includes('Salary Noto Sans SC')));
 await frame("d.querySelector('.stats').scrollIntoView({block:'center'})");await sleep(200);
 fs.writeFileSync('E:/SalaryMeter/checks/hour-theme-'+theme+'.png',(await w.webContents.capturePage()).toPNG());console.log(theme,layout,fonts);
@@ -26,5 +26,5 @@ await run("stateMode='value';document.querySelector('#settingsClose').click();do
 const fonts=await run("Array.from(document.querySelectorAll('.sm-ledger,.sm-ledger b,.sm-ledger span')).map(n=>getComputedStyle(n).fontFamily)");assert(fonts.length>0&&fonts.every(f=>f.includes('Salary Noto Sans SC')));console.log('Ledger fonts',fonts);
 fs.writeFileSync('E:/SalaryMeter/checks/hour-ledger-font.png',(await w.webContents.capturePage()).toPNG());
 await run("document.querySelector('#settingsBtn').click()");await sleep(200);assert.equal(await frame('return d.body.dataset.settingsTheme'),'gold');
-console.log('PASS: themes/persisted config/reopen/fonts/3 columns/5s/error retained/null dash; UI='+expected);app.exit(0);
+console.log('PASS: themes/persisted config/reopen/fonts/4 cells in 2x2/5s/error retained/null dash; UI='+expected);app.exit(0);
 }catch(e){console.error(e);app.exit(1)}});

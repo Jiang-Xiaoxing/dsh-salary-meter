@@ -135,18 +135,24 @@
   .switch input:focus-visible + .switch-track{box-shadow:0 0 0 3px var(--focus-ring)}
 
   .stats{
-    display:grid;grid-template-columns:1fr 1.2fr 1.2fr;gap:0;
+    display:grid;grid-template-columns:1fr 1.2fr;gap:10px 0;
     margin-top:14px;padding:12px 0 3px;border-top:1px solid var(--rule);
   }
   .stat{padding:0 12px;min-width:0;border-right:1px solid var(--rule)}
-  .stat:first-child{padding-left:0}
-  .stat:last-child{border-right:0;padding-right:0}
+  .stat:nth-child(2n+1){padding-left:0}
+  .stat:nth-child(2n){border-right:0;padding-right:0}
   .stat b{
     display:block;font-size:15px;font-weight:500;line-height:1.3;
     font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink);
   }
   .stat span{display:block;margin-top:3px;font-size:10px;line-height:1.4;color:var(--ink-3);white-space:nowrap}
   .stat.hi b{color:var(--ink)}
+  /* 近1小时 token/s：从四格里挪出来单独一行，比小字再淡一档，不跟主数字抢眼。 */
+  .tps-line{
+    margin-top:6px;font-size:10px;line-height:1.5;color:var(--ink-3);opacity:.78;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .tps-line span{color:var(--ink-3)}
 
   .diagnostics{
     margin-top:8px;padding-top:8px;border-top:1px solid var(--rule);
@@ -241,10 +247,12 @@
   </section>
 
   <div class="stats">
-    <div class="stat"><b id="perDay">¥0.00</b><span>每天</span></div>
+    <div class="stat"><b id="perDay">¥0.00</b><span>今天已赚</span></div>
+    <div class="stat"><b id="todayTokens">—</b><span id="todayTokensSub">今天 token</span></div>
     <div class="stat hi"><b id="perMonth">¥0.00</b><span>本月累计 · 估算</span></div>
-    <div class="stat"><b id="perToken">—</b><span title="最近60分钟合格已完成回答的总输出token ÷ 总流时长（不含空闲时间）">近1小时 token/s</span></div>
+    <div class="stat"><b id="monthTokens">—</b><span id="monthTokensSub">本月累计 token</span></div>
   </div>
+  <div class="tps-line" title="最近60分钟合格已完成回答的总输出 token ÷ 总流时长（不含空闲时间）；不到 200 token 或不足半秒不显示">近1小时 <span id="perToken">—</span> token/s</div>
 
   <details class="diagnostics">
     <summary>账目自检与价格信息</summary>
@@ -274,6 +282,7 @@
     setConfig: function (p) { try { localStorage.setItem('salary-widget-cfg', JSON.stringify(Object.assign({}, DEF, p))); } catch (e) {} return Promise.resolve(); },
     getState: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
     recompute: function () { return Promise.resolve({ today: { expense: 0, known: 0, unknown: 0 }, prices: { source: '内置', count: 0 }, sessions: 0 }); },
+    getMonthTokens: function () { return Promise.resolve(null); },
     pickDir: function () { return Promise.resolve(null); }
   };
 
@@ -291,6 +300,10 @@
     perToken: document.getElementById('perToken'),
     perDay: document.getElementById('perDay'),
     perMonth: document.getElementById('perMonth'),
+    monthTokens: document.getElementById('monthTokens'),
+    monthTokensSub: document.getElementById('monthTokensSub'),
+    todayTokens: document.getElementById('todayTokens'),
+    todayTokensSub: document.getElementById('todayTokensSub'),
     checkLine: document.getElementById('checkLine'),
     checkResult: document.getElementById('checkResult'),
     ledgerSeen: document.getElementById('ledgerSeen'),
@@ -384,14 +397,19 @@
     };
   }
 
-  function summarize(c) {
+  /* 只刷新金额和悬停，不碰校验提示那一行。
+     5 秒轮询用这个：『保存失败』也写在 el.diag 上，轮询顺手清掉的话
+     用户可能根本没看见那条提示。 */
+  function refreshAmounts(c) {
+    summarize(c, true);
+  }
+
+  function summarize(c, quiet) {
     var ws = parseHM(c.start), we = parseHM(c.end);
     var span = we - ws;
     var workSec = span - c.lunch * 3600;
     var dayPay = c.salary / Math.max(1, c.days);
     var perSec = workSec > 0 ? dayPay / workSec : 0;
-
-    el.perDay.textContent = '¥' + money(floorTo(dayPay, 2));
 
     // 本月估算：本月已过完的工作日 × 日薪 + 今日已赚
     var now = new Date();
@@ -418,6 +436,15 @@
 
     el.perMonth.textContent = '¥' + money(floorTo(done * dayPay + earned, 2));
 
+    // 「今天已赚」跟着上班时间走，下班后停在日薪。
+    // 日薪本身放进悬停：大字只有一个位置，用户要看的是「今天到手多少」。
+    el.perDay.textContent = '¥' + money(floorTo(earned, 2));
+    el.perDay.parentNode.title = isRest
+      ? '今天休息，不产生工资\n日薪 ¥' + money(floorTo(dayPay, 2)) + '（¥' + group(String(Math.round(c.salary))) + ' ÷ ' + c.days + ' 天）'
+      : '今天已赚 ¥' + money(floorTo(earned, 2)) + ' / 日薪 ¥' + money(floorTo(dayPay, 2))
+        + '\n日薪 = ¥' + group(String(Math.round(c.salary))) + ' ÷ ' + c.days + ' 天';
+
+    if (quiet) return;
     if (span <= 0) el.diag.textContent = '下班时间必须晚于上班时间';
     else if (workSec <= 0) el.diag.textContent = '午休时长超过了在岗时长';
     else el.diag.textContent = '';
@@ -514,8 +541,111 @@
       ? report.tps.toFixed(1) : '—';
   }
 
-  /* 最近有写入：扫描按 mtime 挑今天的会话文件，这里显示最近一次会话写入时间 */
-  function updateSeen(report) {
+  /* ---------------- 本月累计 token ---------------- */
+  /* 主数字：≥1 亿写成「1.43 亿」，≥1 万写成「1291 万」，再小写整数。
+     小字拆开写输入/输出，两个数加起来正好等于主数字，用户能自己对上。 */
+  function humanTokens(n) {
+    var v = Number(n) || 0;
+    if (v >= 1e8) return (v / 1e8).toFixed(2) + ' 亿';
+    if (v >= 1e4) return Math.round(v / 1e4) + ' 万';
+    return String(Math.round(v));
+  }
+  function fullNum(n) {
+    return group(String(Math.round(Number(n) || 0)));
+  }
+  /* 按北京时间取月日：后端统计按北京时间，这里不能跟着系统时区走，
+     否则系统设成 UTC 时 11 月会显示成「10-31 起」。 */
+  function bjDate(ms) {
+    var d = new Date((Number(ms) || 0) + 8 * 3600000);
+    return ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
+  }
+  /* 北京时间今天 0 点的毫秒时间戳（跟后端的 day_start_ms 同一算法）。 */
+  function bjTodayStart(ms) {
+    var t = Number(ms) || Date.now();
+    return Math.floor((t + 8 * 3600000) / 86400000) * 86400000 - 8 * 3600000;
+  }
+
+  var monthTimer = null;
+  /* 现在脸上这格「今天」是哪一天的（北京时间 0 点）。0 表示没数／不知道。 */
+  var shownTodayStart = 0;
+
+  /* 跨过零点后，昨天那份「今天」不能继续挂在脸上。 */
+  function clearTodayIfStale() {
+    if (shownTodayStart && shownTodayStart !== bjTodayStart(Date.now())) {
+      shownTodayStart = 0;
+      el.todayTokens.textContent = '—';
+      el.todayTokensSub.textContent = '今天 token';
+      el.todayTokens.parentNode.title = '';
+      el.todayTokensSub.title = '';
+    }
+  }
+
+  function showMonth(payload) {
+    if (!payload) return;
+    // 新接口是 {report: {...}|null, stale}；也兼容直接给一个 report。
+    var report = payload.report !== undefined ? payload.report : payload;
+    // report 为 null＝后台正忙/跨月/换了目录，没有可用的本月数：
+    // 这时保持「—」不动，绝不能把 0 或上个月的数显示成本月。
+    // 但「今天」那格如果是昨天的，得先清掉——那份数不能冒充今天。
+    if (!report) { clearTodayIfStale(); return; }
+    var tokens = report.tokens || {};
+    var total = typeof report.total === 'number'
+      ? report.total
+      : (Number(tokens.input) || 0) + (Number(tokens.output) || 0);
+    el.monthTokens.textContent = humanTokens(total);
+    // 小字只说人话：写「本月累计 token」，跟旁边那格「本月累计 · 估算」对得上。
+    // 输入/输出这种拆法不摆在脸上（用户看不懂「入 / 出」），放进悬停提示里。
+    el.monthTokensSub.textContent = '本月累计 token';
+    el.monthTokens.parentNode.title = '本月（' + bjDate(report.month_start_ms || Date.now()) + ' 起的累计用量）'
+      + '\n输入 ' + fullNum(tokens.input) + ' · 输出 ' + fullNum(tokens.output)
+      + '\n缓存读 ' + fullNum(tokens.cache_read) + '（另算，不含在上面那个数里）'
+      + '\n' + fullNum(tokens.events) + ' 笔 · ' + fullNum(report.files_with_events) + ' 个会话'
+      + (report.failed ? '\n' + report.failed + ' 个文件读不出（已跳过）' : '');
+    // 失败提示要能清掉：这一轮已经读全了，上一轮留下的「数字偏小」不能还挂着。
+    el.monthTokensSub.title = report.failed
+      ? report.failed + ' 个会话日志解压失败，数字偏小'
+      : '';
+
+    /* 今天那格：同一个接口顺带给的，不额外扫日志。
+       老版本没有 today 字段（或缓存是旧结构）：这时守「—」，不拿 0 冒充，
+       也不能把上一轮还没换掉的旧数字继续挂在脸上 —— 那份数是别的场次留下的。
+       还有一种情况：报告是午夜之前扫出来的，它的「今天」其实是昨天。
+       这时只认月累计，「今天」清成「—」，等下一轮。 */
+    var today = report.today || null;
+    var reportDay = Number(report.today_start_ms) || 0;
+    var staleDay = reportDay > 0 && reportDay !== bjTodayStart(Date.now());
+    if (today && !staleDay) {
+      var todayTotal = typeof report.today_total === 'number'
+        ? report.today_total
+        : (Number(today.input) || 0) + (Number(today.output) || 0);
+      el.todayTokens.textContent = humanTokens(todayTotal);
+      el.todayTokensSub.textContent = '今天 token';
+      el.todayTokens.parentNode.title = '今天（' + bjDate(reportDay || Date.now()) + ' 0 点起）'
+        + '\n输入 ' + fullNum(today.input) + ' · 输出 ' + fullNum(today.output)
+        + '\n缓存读 ' + fullNum(today.cache_read) + '（另算，不含在上面那个数里）'
+        + '\n' + fullNum(today.events) + ' 笔';
+      el.todayTokensSub.title = '';
+      shownTodayStart = reportDay || bjTodayStart(Date.now());
+    } else {
+      shownTodayStart = 0;
+      el.todayTokens.textContent = '—';
+      el.todayTokensSub.textContent = '今天 token';
+      el.todayTokens.parentNode.title = '';
+      el.todayTokensSub.title = '';
+    }
+  }
+
+  function loadMonth() {
+    if (!api.getMonthTokens) return;
+    var pending = null;
+    try { pending = api.getMonthTokens(); } catch (e) { return; }
+    if (!pending || typeof pending.then !== 'function') return;
+    pending.then(showMonth).catch(function () {
+      // 失败保留旧数字；还没算出来就还是那个「—」
+    });
+  }
+
+  /* 最近有写入：扫描按 mtime 挑今天的会话文件，这里显示最近一次会话写入时间 */  function updateSeen(report) {
     var seen = report && report.last_write;
     if (seen && seen > 0) {
       var d = new Date(seen);
@@ -530,6 +660,10 @@
   }
 
   function refreshLive() {
+    // 「今天已赚」跟着上班时间走，得跟着这个 5 秒的轮询一起重算；
+    // 只在打开和改表单时算一次的话，设置页开着时金额会一直停在那儿。
+    // 只刷金额，不动 el.diag（那条可能正挂着「保存失败」）。
+    if (cfg) refreshAmounts(cfg);
     api.getState().then(function (report) {
       showCheck(report);
       showTps(report);
@@ -537,7 +671,34 @@
     }).catch(function () {});
   }
   var tpsTimer = setInterval(refreshLive, 5000);
-  window.addEventListener('pagehide', function () { clearInterval(tpsTimer); });
+
+  /* 设置页是主窗口里的 iframe，关掉设置只是把外层 hidden 掉，这份文档不会卸载，
+     pagehide 也不会来。所以定时器开没开跟「设置页看不看得见」是两件事：
+     关着的时候别扫（白读两百多兆日志），重新打开时要立刻给一次新数，
+     否则用户看到的是上次关之前那个旧数。
+     开关由外层 widget.js 通过下面两个钩子通知。 */
+  var monthActive = true;
+  window.__onSettingsShow = function () {
+    monthActive = true;
+    // 重新打开时先把「今天已赚」拉到当前时刻，再取 token 新数。
+    // 同样只刷金额，别把上次的校验提示抹掉。
+    if (cfg) refreshAmounts(cfg);
+    // 跨天了的话，昨天那份「今天」不能还挂在脸上：先清掉，等新数回来再填。
+    clearTodayIfStale();
+    loadMonth();
+  };
+  window.__onSettingsHide = function () {
+    monthActive = false;
+  };
+
+  /* 本月 token 不用跟着 5 秒刷新：这个数一天才涨一点，60 秒一次足够，
+     也不会让设置页一直读日志。打开设置页先算一次，之后按 60 秒。 */
+  loadMonth();
+  monthTimer = setInterval(function () { if (monthActive) loadMonth(); }, 60000);
+  window.addEventListener('pagehide', function () {
+    clearInterval(tpsTimer);
+    clearInterval(monthTimer);
+  });
 
   /* ---------------- 账本目录 ---------------- */
   var dirs = [];

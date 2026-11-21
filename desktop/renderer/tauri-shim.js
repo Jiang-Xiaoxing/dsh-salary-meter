@@ -26,6 +26,10 @@
     getState: function () {
       return invoke('get_state');
     },
+    // 本月累计 token：单独一条命令，不要塞进 get_state（那条每 3 秒拉一次，经不起扫日志）
+    getMonthTokens: function () {
+      return invoke('get_month_tokens');
+    },
     pickDir: function () {
       return invoke('pick_ledger_dir');
     },

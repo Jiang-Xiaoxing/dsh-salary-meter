@@ -1059,6 +1059,18 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     if (window.__events.length > 40) window.__events.shift();
   }
 
+  /* 告诉设置页「现在是开着还是关着」：设置页拿它决定停不停本月 token 的定时器。
+     iframe 关掉只是 hidden，文档不会卸载，所以必须由这里主动通知。
+     try/catch 兜住跨文档异常；iframe 还没加载好时那份代码首屏自己会先算一次。 */
+  function tellSettings(shown) {
+    try {
+      var w = el.settingsFrame && el.settingsFrame.contentWindow;
+      if (!w) return;
+      var fn = shown ? w.__onSettingsShow : w.__onSettingsHide;
+      if (typeof fn === 'function') fn();
+    } catch (error) { /* 跨域/还没加载好，下一次开关再通知 */ }
+  }
+
   function openSettings() {
     if (!el.settingsLayer.hidden) return;
     trace('open');
@@ -1069,6 +1081,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.settingsLayer.hidden = false;
     el.mascotBtn.blur();
     try { api.setMode('settings'); } catch (error) { /* 尺寸改不动也照样能用 */ }
+    tellSettings(true);
   }
 
   function closeSettings() {
@@ -1077,6 +1090,7 @@ import { EGG, CLICK_EGG, IDLE_EGG, clickStreak, rollClickEgg, rollIdleEgg } from
     el.settingsLayer.hidden = true;
     document.body.classList.remove("settings-open");
     try { api.setMode('widget'); } catch (error) { /* ignore */ }
+    tellSettings(false);
   }
 
   el.mascotBtn.addEventListener('click', () => {

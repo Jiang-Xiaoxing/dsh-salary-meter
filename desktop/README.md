@@ -2,7 +2,7 @@
 
 蓝毛鲸鱼娘、滚轮余额、今日账目和跨天结算。完整功能与素材总览见 [项目首页](../README.md)。
 
-> 当前桌面发布为 [desktop-v0.1.7](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.7)，程序内部版本为 **0.2.8**（在 Windows 里看文件属性时显示的就是这个号）。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
+> 当前桌面发布为 [desktop-v0.1.9](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.9)，程序内部版本为 **0.2.10**（在 Windows 里看文件属性时显示的就是这个号）。它与 DSH 插件 **v0.3.3** 是两个组件，不要混用版本号或安装方式。
 
 ## 下载与操作
 
@@ -10,7 +10,7 @@
 - `SalaryMeter-Setup.exe`：安装版。
 - 当前发布目标是 **Windows x64**，依赖 WebView2 Runtime。更新前先退出旧程序。
 
-下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.7)。
+下载入口：[桌面版 Release](https://github.com/Jiang-Xiaoxing/dsh-salary-meter/releases/tag/desktop-v0.1.9)。
 
 人物独立站在桌面上，脚下余额条显示今日工资减去模型费用估算。点击余额条或状态文字展开/收起账目；点人物有互动；拖动可移动并保存位置。点账目右上角 `⋯`、右键人物、鱼粮栏或账目卡，或通过托盘菜单打开设置。
 
@@ -27,6 +27,8 @@
 ## 三档外观
 
 三种主题共用同一套信息层级，只换颜色：
+
+鱼粮、金额和状态文字在三种主题下都用金色。浅白主题用深金，白底上也容易看清。
 
 | 深色 | 浅白 | 暗金 |
 | --- | --- | --- |
@@ -136,7 +138,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.8，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
+产物在 `desktop/src-tauri/target/release/` 及其 `bundle/nsis/` 中。当前配置的安装器版本是 0.2.10，发布页下载名会简化为 `SalaryMeter-Setup.exe`；不要照搬旧 README 的 0.2.1 文件名。
 
 ### 源码目录
 

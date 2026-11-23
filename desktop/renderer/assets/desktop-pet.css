@@ -36,11 +36,14 @@
   display:flex;align-items:baseline;justify-content:center;gap:10px;
   padding:0 0 11px;background:none;border:0;border-radius:0;box-shadow:none;
   font-size:21px;line-height:1;letter-spacing:0;cursor:pointer;-webkit-app-region:no-drag;
-  font-family:'Salary Noto Sans SC',system-ui,-apple-system,'Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif;font-weight:400;color:#f0f2f6;
+  font-family:'Salary Noto Sans SC',system-ui,-apple-system,'Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif;font-weight:400;color:#f1d38e;
   white-space:nowrap;
   text-shadow:0 1px 1px #0008;
 }
-[data-salary-meter][data-theme='light'] .sm-balance {color:#353b48;text-shadow:none}
+/* 用户 2026-11-21 定：「鱼粮 + 金额 + 右边状态」整行都是金色，三种配色都金。
+   金色按各自底色分开挑：白底上浅金会糊掉，所以浅白主题用深金。
+   涨跌时金额仍会短暂变绿/变红（那是既有反馈），静止时统一是金色。 */
+[data-salary-meter][data-theme='light'] .sm-balance {color:#8a6a24;text-shadow:none}
 [data-salary-meter][data-theme='gold'] .sm-balance {color:#d6b36a}
 [data-salary-meter] .sm-balance::after {
   content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:214px;height:1px;pointer-events:none;
@@ -106,14 +109,15 @@
 [data-salary-meter] .sm-balance.down .sm-money{color:#dc4545}
 [data-salary-meter] #petStatus{font-size:15px;font-weight:400;margin:0;color:inherit;white-space:nowrap}
 /* 「休息日」这段文字本身就是展开按钮：点一下展开、再点收起。
-   平时稍微收一点亮度，鼠标移上去提亮，提示可以点。 */
+   原来平时压到 82% 不透明度来提示「可点」，但那会把金色冲淡、跟前两处不是一个色，
+   浅白主题下对比度还掉到 3.54:1。改成常态满不透明、悬停显下划线来提示可点。 */
 [data-salary-meter] .sm-balance .sm-toggle{
   margin:0;padding:0;border:0;background:none;cursor:pointer;user-select:none;
   height:auto;min-height:0;letter-spacing:0;
   font-family:inherit;font-size:15px;font-weight:400;line-height:inherit;color:inherit;text-shadow:inherit;
-  -webkit-app-region:no-drag;opacity:.82;transition:opacity .16s ease;
+  -webkit-app-region:no-drag;text-decoration:none;
 }
-[data-salary-meter] .sm-balance .sm-toggle:hover{opacity:1}
+[data-salary-meter] .sm-balance .sm-toggle:hover{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
 [data-salary-meter] .sm-balance .sm-toggle:focus-visible{opacity:1;outline:2px solid var(--sm-balance-focus);outline-offset:3px;border-radius:4px}
 
 [data-salary-meter] .sm-balance{--sm-balance-focus:#8398ff}
